@@ -5,7 +5,10 @@ local replicatedStorage = game:GetService("ReplicatedStorage")
 local starterPlayer = game:GetService("StarterPlayer")
 local teams = game:GetService("Teams")
 
--- Helper to safely get config data without requiring the whole module if not needed
+-- Store active behavior instances
+local activeBehaviors = {}
+
+-- Helper to safely get config data
 local function getConfigData(configModule)
 	if configModule and configModule:IsA("ModuleScript") then
 		local s, d = pcall(require, configModule)
@@ -41,7 +44,7 @@ function module.loadAsCharacter(player, characterName, characterSkin, team)
 		end
 	end
 
-	-- Fallback to default if custom skin is missing (prevents invisible players)
+	-- Fallback to default if custom skin is missing
 	if not sourceModel then
 		warn("Skin model not found ("..tostring(characterSkin).."), reverting to Default.")
 		sourceModel = charFolder:FindFirstChild("Default")
@@ -58,29 +61,24 @@ function module.loadAsCharacter(player, characterName, characterSkin, team)
 	player:LoadCharacter() -- This loads the 'StarterCharacter' we just put in StarterPlayer
 	model:Destroy() -- Clean up from StarterPlayer immediately
 
-	-- 4. Handle Scripts and Logic
-	local characterScript = charFolder:FindFirstChild("CharacterScript")
-	if characterScript then
-		local newScript = characterScript:Clone()
-		newScript.Parent = player.Character
-
-		-- Optional: Read health from Config instead of Attribute
-		local configData = getConfigData(charFolder:FindFirstChild("Config"))
-		local health = configData.Health or characterScript:GetAttribute("Health") or 100
-
-		local humanoid = player.Character:FindFirstChildWhichIsA("Humanoid")
-		if humanoid then
-			humanoid.MaxHealth = health
-			humanoid.Health = health
-		end
+	-- 4. Get Config
+	local configData = getConfigData(charFolder:FindFirstChild("Config"))
+	
+	-- 5. Setup Humanoid with Config Health
+	local humanoid = player.Character:FindFirstChildWhichIsA("Humanoid")
+	if humanoid then
+		local health = configData.Health or 100
+		humanoid.MaxHealth = health
+		humanoid.Health = health
 	end
 
+	-- 6. Setup Ragdoll
 	local ragdollScript = replicatedStorage:FindFirstChild("RagdollR6")
 	if ragdollScript then
 		ragdollScript:Clone().Parent = player.Character
 	end
 
-	-- 5. Audio (Standard setup)
+	-- 7. Audio (Standard setup)
 	local hrp = player.Character:WaitForChild("HumanoidRootPart", 5)
 	if hrp then
 		local groundStep = Instance.new("Sound")
@@ -95,9 +93,48 @@ function module.loadAsCharacter(player, characterName, characterSkin, team)
 		grassStep.Parent = hrp
 	end
 
-	-- 6. Mark attributes
+	-- 8. Mark attributes
 	if team == teams.Killers then
 		player.Character:SetAttribute("TerrorRig", true)
+	end
+
+	-- 9. Initialize Server-Side Behavior
+	local behaviorModule = charFolder:FindFirstChild("Behavior")
+	if behaviorModule and behaviorModule:IsA("ModuleScript") then
+		-- Clean up any existing behavior for this player
+		if activeBehaviors[player.UserId] then
+			activeBehaviors[player.UserId]:Destroy()
+			activeBehaviors[player.UserId] = nil
+		end
+		
+		-- Create new behavior instance
+		local success, behaviorClass = pcall(require, behaviorModule)
+		if success and behaviorClass and behaviorClass.new then
+			local behavior = behaviorClass.new(player, player.Character, configData)
+			activeBehaviors[player.UserId] = behavior
+			
+			print("✓ Initialized behavior for", player.Name, "as", characterName)
+			
+			-- Cleanup on death
+			humanoid.Died:Connect(function()
+				if activeBehaviors[player.UserId] then
+					activeBehaviors[player.UserId]:Destroy()
+					activeBehaviors[player.UserId] = nil
+				end
+			end)
+		else
+			warn("Failed to initialize Behavior module:", behaviorClass)
+		end
+	else
+		warn("No Behavior module found for", characterName, "- character may not function properly")
+	end
+end
+
+-- Cleanup function for when player leaves
+function module.cleanup(player)
+	if activeBehaviors[player.UserId] then
+		activeBehaviors[player.UserId]:Destroy()
+		activeBehaviors[player.UserId] = nil
 	end
 end
 

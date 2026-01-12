@@ -17,10 +17,15 @@ function module.create(cframe: CFrame, size: Vector3, duration: number)
 		hitbox.Transparency = 1
 	end
 	hitbox.Parent = workspace.GameDebris
-	runService.RenderStepped:Connect(function()
-		if hitbox then
+	local conn
+	conn = runService.Heartbeat:Connect(function()
+		if hitbox and hitbox.Parent then
 			hitbox.CFrame = cframe
 			hitbox.Velocity = Vector3.zero
+		else
+			if conn then
+				conn:Disconnect()
+			end
 		end
 	end)
 	task.delay(duration, function()

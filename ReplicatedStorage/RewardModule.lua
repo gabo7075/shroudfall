@@ -12,6 +12,8 @@ module.DefaultRewards = {
 
 -- Function to create a reward pop-up (client-side)
 function module.showRewardPopup(player, message, money, malice)
+	money = money or 0
+	malice = malice or 0
 	local playerGui = player:WaitForChild("PlayerGui")
 	local rewardGui = playerGui:FindFirstChild("RewardGui")
 	
