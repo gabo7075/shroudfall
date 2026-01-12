@@ -10,6 +10,7 @@ InventoryData.AllowedUsernames = {
 	"extermillon09",
 	"AlternGabri7075",
 	"Player1",
+	"Player2",
 	"Player3",
 }
 
