@@ -127,25 +127,40 @@ local function getRigConfig(rig)
 end
 
 -- Create sounds from Config data
+-- Asegurarnos que el Folder exista
+local function getOrCreateTerrorFolder()
+	local folder = workspace:FindFirstChild("TerrorSounds")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "TerrorSounds"
+		folder.Parent = workspace
+	end
+	return folder
+end
+
+-- Create sounds from Config data (ahora dentro del folder)
 local function createSoundsFromConfig(rig, terrorSoundsConfig)
 	if not terrorSoundsConfig or #terrorSoundsConfig == 0 then return nil end
 
 	local sounds = {}
 	local maxVolumes = {}
+	local folder = getOrCreateTerrorFolder()
+
+	-- Obtener nombre del killer/rig para el prefijo
+	local killerName = getKillerNameFromRig(rig) or "UnknownKiller"
 
 	for i, soundData in ipairs(terrorSoundsConfig) do
 		local sound = Instance.new("Sound")
-		sound.Name = soundData.Name or ("Layer" .. i)
+		-- 🎯 Aquí agregamos el prefijo
+		sound.Name = killerName .. "_" .. (soundData.Name or ("Layer" .. i))
 		sound.SoundId = soundData.Id or ""
 		sound.Volume = 0
 		sound.Looped = true
 		sound.Playing = false
-		sound.Parent = rig.PrimaryPart or rig:FindFirstChild("HumanoidRootPart")
+		sound.Parent = folder
 
-		-- Store the configured volume
 		maxVolumes[i] = soundData.Volume or MAX_VOLUME
 
-		-- Mark which one is the chase sound
 		if soundData.Chase == true then
 			sound:SetAttribute("Chase", true)
 		end
@@ -255,7 +270,19 @@ local function ensureRigState(rig)
 	return state
 end
 
--- Cleanup sounds when rig is removed
+-- Limpieza de sonidos huérfanos (no reproducidos) en el folder
+local function cleanupUnusedSounds()
+	local folder = workspace:FindFirstChild("TerrorSounds")
+	if not folder then return end
+
+	for _, sound in ipairs(folder:GetChildren()) do
+		if sound:IsA("Sound") and not sound.Playing then
+			pcall(function() sound:Destroy() end)
+		end
+	end
+end
+
+-- Además, cuando limpies rigState, destruimos los sonidos específicos
 local function cleanupRigState(rig)
 	local state = rigStateCache[rig]
 	if state and state.sounds then
@@ -279,6 +306,15 @@ local activeRigStates = {}
 local ambientSound = nil
 local isAmbientFaded = false
 local lockedChaseRig = nil
+
+-- Llamado periódico para limpiar sonidos
+RunService.Heartbeat:Connect(function(dt)
+	accumulator = accumulator + dt
+	if accumulator >= 5 then -- cada 5 segundos
+		cleanupUnusedSounds()
+		accumulator = 0
+	end
+end)
 
 player.CharacterAdded:Connect(function()
 	wait(0.05)
