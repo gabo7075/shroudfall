@@ -25,7 +25,7 @@ return {
 		Punch = "rbxassetid://136672494666856",
 	},
 	
-	-- Sounds (new)
+	-- Sounds
 	Sounds = {
 		Swing = {
 			Id = "rbxassetid://4571259077",
@@ -74,12 +74,45 @@ return {
 		}
 	},
 
-	-- Terror Radius Configuration (optional - for TerrorRadius script)
+	-- Terror Radius Configuration
 	TerrorRadius = {
-		OuterRadius = 60,
-		L1_Min = 45,
-		L2_Min = 30,
-		L3_Min = 6,
-		UseVolume = false
+		-- Distance thresholds
+		OuterRadius = 60,  -- Maximum distance to hear terror radius
+		L1_Min = 45,       -- Distance to start Layer 1
+		L2_Min = 30,       -- Distance to start Layer 2
+		L3_Min = 6,        -- Distance to start Layer 3/Chase
+		UseVolume = false, -- Whether to use the volumes specified in Sounds below
+		
+		-- Terror Radius Audio Layers
+		Sounds = {
+			-- Layer 1: Distant heartbeat (furthest from killer)
+			{
+				Name = "Layer1",
+				Id = "rbxassetid://YOUR_LAYER1_SOUND_ID",
+				Volume = 0.4,
+				Chase = false
+			},
+			-- Layer 2: Medium intensity
+			{
+				Name = "Layer2",
+				Id = "rbxassetid://YOUR_LAYER2_SOUND_ID",
+				Volume = 0.5,
+				Chase = false
+			},
+			-- Layer 3: High intensity
+			{
+				Name = "Layer3",
+				Id = "rbxassetid://YOUR_LAYER3_SOUND_ID",
+				Volume = 0.6,
+				Chase = false
+			},
+			-- Layer 4: Chase music (only plays for killer when near survivor)
+			{
+				Name = "Chase",
+				Id = "rbxassetid://YOUR_CHASE_SOUND_ID",
+				Volume = 0.6,
+				Chase = true  -- Mark this as the chase layer
+			}
+		}
 	}
 }

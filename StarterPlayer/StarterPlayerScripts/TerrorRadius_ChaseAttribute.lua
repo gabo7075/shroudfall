@@ -2,11 +2,11 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local Teams = game:GetService("Teams")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 
--- CONFIG GLOBAL (valores por defecto si el rig no tiene attributes)
-local SOUND_FOLDER_NAME = "TerrorSounds"
+-- CONFIG GLOBAL (valores por defecto si el Config no existe)
 local DEFAULT_OUTER_RADIUS = 60
 local DEFAULT_L1_MIN = 45
 local DEFAULT_L2_MIN = 30
@@ -15,7 +15,10 @@ local UPDATE_INTERVAL = 0.12
 local CROSSFADE_TIME = 0.5
 local MAX_VOLUME = 0.6
 
--- helper: get character root
+-- Cache for rig -> killer name mapping
+local rigToKillerName = {}
+
+-- Helper: get character root
 local function getCharRoot()
 	if player.Character then
 		return player.Character:FindFirstChild("HumanoidRootPart") or player.Character.PrimaryPart
@@ -23,7 +26,7 @@ local function getCharRoot()
 	return nil
 end
 
--- find terror rigs (busca por attribute "TerrorRig" = true)
+-- Find terror rigs (busca por attribute "TerrorRig" = true)
 local function findTerrorRigs()
 	local rigs = {}
 	for _, v in ipairs(workspace:GetChildren()) do
@@ -40,7 +43,7 @@ local function findTerrorRigs()
 	return rigs
 end
 
--- get rig position
+-- Get rig position
 local function getRigPosition(rig)
 	if not rig then return nil end
 	if rig.PrimaryPart then return rig.PrimaryPart.Position end
@@ -52,7 +55,53 @@ local function getRigPosition(rig)
 	return nil
 end
 
--- Obtener configuración personalizada del rig (con attributes from CharacterScript)
+-- Get killer name from rig using attribute
+local function getKillerNameFromRig(rig)
+	if not rig then return nil end
+	
+	-- Check cache first
+	if rigToKillerName[rig] then
+		return rigToKillerName[rig]
+	end
+	
+	-- Try to get from attribute "KillerName" or "CharacterName"
+	local killerName = nil
+	pcall(function()
+		killerName = rig:GetAttribute("KillerName") or rig:GetAttribute("CharacterName")
+	end)
+	
+	-- Cache it if found
+	if killerName then
+		rigToKillerName[rig] = killerName
+	end
+	
+	return killerName
+end
+
+-- Load Config module for a killer
+local function loadKillerConfig(killerName)
+	if not killerName then return nil end
+	
+	local configPath = ReplicatedStorage:FindFirstChild("Packets")
+	if not configPath then return nil end
+	
+	configPath = configPath:FindFirstChild("Killers")
+	if not configPath then return nil end
+	
+	configPath = configPath:FindFirstChild(killerName)
+	if not configPath then return nil end
+	
+	local configModule = configPath:FindFirstChild("Config")
+	if not configModule or not configModule:IsA("ModuleScript") then return nil end
+	
+	local success, config = pcall(function()
+		return require(configModule)
+	end)
+	
+	return success and config or nil
+end
+
+-- Get terror radius configuration from Config
 local function getRigConfig(rig)
 	local config = {
 		outerRadius = DEFAULT_OUTER_RADIUS,
@@ -64,62 +113,69 @@ local function getRigConfig(rig)
 
 	if not rig then return config end
 
-	local charScript = rig:FindFirstChild("CharacterScript")
-	if charScript then
-		pcall(function()
-			config.outerRadius = charScript:GetAttribute("OuterRadius") or DEFAULT_OUTER_RADIUS
-			config.l1Min = charScript:GetAttribute("L1_Min") or DEFAULT_L1_MIN
-			config.l2Min = charScript:GetAttribute("L2_Min") or DEFAULT_L2_MIN
-			config.l3Min = charScript:GetAttribute("L3_Min") or DEFAULT_L3_MIN
-			local uv = charScript:GetAttribute("UseVolume")
-			if uv ~= nil then
-				config.useVolume = (uv == true)
-			end
-		end)
-	end
+	local killerName = getKillerNameFromRig(rig)
+	if not killerName then return config end
+	
+	local killerConfig = loadKillerConfig(killerName)
+	if not killerConfig or not killerConfig.TerrorRadius then return config end
+	
+	local tr = killerConfig.TerrorRadius
+	config.outerRadius = tr.OuterRadius or DEFAULT_OUTER_RADIUS
+	config.l1Min = tr.L1_Min or DEFAULT_L1_MIN
+	config.l2Min = tr.L2_Min or DEFAULT_L2_MIN
+	config.l3Min = tr.L3_Min or DEFAULT_L3_MIN
+	config.useVolume = tr.UseVolume or false
 
 	return config
 end
 
--- load sounds from rig (returns ordered list AND a parallel list of original volumes)
-local function loadSoundsFromRig(rig)
-	if not rig then return nil end
-	local folder = rig:FindFirstChild(SOUND_FOLDER_NAME)
-	if not folder then return nil end
+-- Create sounds from Config data
+local function createSoundsFromConfig(rig, terrorSoundsConfig)
+	if not terrorSoundsConfig or #terrorSoundsConfig == 0 then return nil end
+	
 	local sounds = {}
-	local origVolumes = {}
-	for _, s in ipairs(folder:GetChildren()) do
-		if s:IsA("Sound") then
-			local originalVol = nil
-			pcall(function() originalVol = s.Volume end)
-			if not originalVol then originalVol = MAX_VOLUME end
-
-			s.Looped = true
-			s.Volume = 0
-			s.Playing = false
-			table.insert(sounds, s)
-			table.insert(origVolumes, originalVol)
+	local maxVolumes = {}
+	
+	for i, soundData in ipairs(terrorSoundsConfig) do
+		local sound = Instance.new("Sound")
+		sound.Name = soundData.Name or ("Layer" .. i)
+		sound.SoundId = soundData.Id or ""
+		sound.Volume = 0
+		sound.Looped = true
+		sound.Playing = false
+		sound.Parent = rig.PrimaryPart or rig:FindFirstChild("HumanoidRootPart")
+		
+		-- Store the configured volume
+		maxVolumes[i] = soundData.Volume or MAX_VOLUME
+		
+		-- Mark which one is the chase sound
+		if soundData.Chase == true then
+			sound:SetAttribute("Chase", true)
 		end
+		
+		table.insert(sounds, sound)
 	end
-	if #sounds == 0 then return nil end
-
-	-- ORDENAR por nombre para mantener orden consistente
-	local indices = {}
-	for i = 1, #sounds do indices[i] = i end
-	table.sort(indices, function(a, b)
-		return sounds[a].Name < sounds[b].Name
-	end)
-	local sortedSounds = {}
-	local sortedOrig = {}
-	for i, idx in ipairs(indices) do
-		table.insert(sortedSounds, sounds[idx])
-		table.insert(sortedOrig, origVolumes[idx])
-	end
-
-	return sortedSounds, sortedOrig
+	
+	return sounds, maxVolumes
 end
 
--- helper: undetectable checks
+-- Load sounds from Config instead of rig folder
+local function loadSoundsFromConfig(rig)
+	if not rig then return nil end
+	
+	local killerName = getKillerNameFromRig(rig)
+	if not killerName then return nil end
+	
+	local killerConfig = loadKillerConfig(killerName)
+	if not killerConfig or not killerConfig.TerrorRadius or not killerConfig.TerrorRadius.Sounds then 
+		return nil 
+	end
+	
+	local terrorSounds = killerConfig.TerrorRadius.Sounds
+	return createSoundsFromConfig(rig, terrorSounds)
+end
+
+-- Helper: undetectable checks
 local function getRigUndetectable(rig)
 	local und = 0
 	pcall(function()
@@ -137,7 +193,7 @@ local function getPlayerUndetectable(player)
 	return und > 0
 end
 
--- tween volume safely
+-- Tween volume safely
 local function tweenVolume(sound, target, time)
 	if not sound or not sound:IsA("Sound") then return end
 	local ok, _ = pcall(function()
@@ -165,32 +221,25 @@ local function fadeOutAndStop(sound, fadeTime)
 	end)
 end
 
--- per-rig state
+-- Per-rig state
 local rigStateCache = {}
 
 local function ensureRigState(rig)
 	if rigStateCache[rig] then return rigStateCache[rig] end
-	local sounds, origVolumes = loadSoundsFromRig(rig)
+	
+	local sounds, maxVolumes = loadSoundsFromConfig(rig)
 	if not sounds then return nil end
+	
 	local config = getRigConfig(rig)
 	local state = {
 		sounds = sounds,
-		maxVolumes = {}, 
+		maxVolumes = maxVolumes, 
 		chaseActive = false, 
 		chaseSoundIndex = nil,
 		config = config
 	}
 
-	for i, s in ipairs(sounds) do
-		local orig = origVolumes[i] or MAX_VOLUME
-		if config.useVolume == true then
-			state.maxVolumes[i] = orig
-		else
-			state.maxVolumes[i] = MAX_VOLUME
-		end
-	end
-
-	-- detect which sound has attribute Chase = true
+	-- Detect which sound has attribute Chase = true
 	for i, s in ipairs(sounds) do
 		local attr = nil
 		pcall(function() attr = s:GetAttribute("Chase") end)
@@ -199,14 +248,34 @@ local function ensureRigState(rig)
 			break
 		end
 	end
+	
+	-- Fallback to layer 4 if no chase sound found
 	if not state.chaseSoundIndex and #sounds >= 4 then
 		state.chaseSoundIndex = 4
 	end
+	
 	rigStateCache[rig] = state
 	return state
 end
 
--- main loop
+-- Cleanup sounds when rig is removed
+local function cleanupRigState(rig)
+	local state = rigStateCache[rig]
+	if state and state.sounds then
+		for _, sound in ipairs(state.sounds) do
+			if sound and sound:IsA("Sound") then
+				pcall(function()
+					sound:Stop()
+					sound:Destroy()
+				end)
+			end
+		end
+	end
+	rigStateCache[rig] = nil
+	rigToKillerName[rig] = nil
+end
+
+-- Main loop
 local accumulator = 0
 local lastRoot = nil
 local activeRigStates = {}
@@ -219,6 +288,13 @@ player.CharacterAdded:Connect(function()
 	lastRoot = getCharRoot()
 	activeRigStates = {}
 	lockedChaseRig = nil
+end)
+
+-- Cleanup when rigs are removed
+workspace.ChildRemoved:Connect(function(child)
+	if rigStateCache[child] then
+		cleanupRigState(child)
+	end
 end)
 
 RunService.Heartbeat:Connect(function(dt)
@@ -276,8 +352,6 @@ RunService.Heartbeat:Connect(function(dt)
 				local isSelf = (rig == player.Character)
 
 				-- 🚫 UNDETECTABLE LOGIC FOR SURVIVORS:
-				-- Skip processing killer rigs that are Undetectable
-				-- (Survivors can't hear terror radius from Undetectable killers)
 				if not isSelf then
 					local rigPlayer = Players:GetPlayerFromCharacter(rig)
 
@@ -288,7 +362,6 @@ RunService.Heartbeat:Connect(function(dt)
 
 					-- Skip Undetectable killer rigs
 					if getRigUndetectable(rig) then
-						-- Clean up any active sounds from this rig
 						if activeRigStates[rig] then
 							for _, s in ipairs(st.sounds) do
 								fadeOutAndStop(s, CROSSFADE_TIME)
@@ -306,14 +379,12 @@ RunService.Heartbeat:Connect(function(dt)
 				local nearestDist = (pos - charRoot.Position).Magnitude
 
 				-- 🎯 UNDETECTABLE LOGIC FOR KILLERS:
-				-- When playing as killer, only play chase sound near non-Undetectable survivors
 				if isSelf then
 					local closestDist = math.huge
 					local hasDetectableSurvivor = false
 
 					for _, p in ipairs(Players:GetPlayers()) do
 						if p ~= player and p.Team == Teams.Survivors and p.Character then
-							-- Skip Undetectable survivors completely
 							if getPlayerUndetectable(p) then 
 								continue 
 							end
@@ -329,7 +400,6 @@ RunService.Heartbeat:Connect(function(dt)
 						end
 					end
 
-					-- If no detectable survivors exist, disable all sounds
 					if not hasDetectableSurvivor or closestDist == math.huge then
 						nearestDist = st.config.outerRadius + 1
 					else
