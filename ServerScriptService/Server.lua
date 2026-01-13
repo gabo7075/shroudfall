@@ -68,16 +68,6 @@ players.PlayerAdded:Connect(function(plr)
 						timerManager.setTime(newTime)
 					end
 
-					-- Cleanup sounds
-					for i = 1, #numOfKillers do
-						if numOfKillers[i].Character then
-							local terrorSounds = numOfKillers[i].Character:FindFirstChild("TerrorSounds")
-							if terrorSounds then
-								terrorSounds:Destroy()
-							end
-						end
-					end
-
 					local currentMap = workspace.GameDebris:FindFirstChild("CurrentMap")
 					if currentMap then
 						local mapMusic = currentMap:FindFirstChild("Music")
@@ -130,16 +120,6 @@ players.PlayerRemoving:Connect(function(plr)
 			else
 				-- Standard LMS
 				gameMod.setTime(75)
-			end
-
-			-- Cleanup sounds
-			for i = 1, #numOfKillers do
-				if numOfKillers[i].Character then
-					local terrorSounds = numOfKillers[i].Character:FindFirstChild("TerrorSounds")
-					if terrorSounds then
-						terrorSounds:Destroy()
-					end
-				end
 			end
 
 			local currentMap = workspace.GameDebris:FindFirstChild("CurrentMap")

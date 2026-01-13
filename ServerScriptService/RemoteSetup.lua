@@ -18,14 +18,14 @@ end
 local function createRemote(name, remoteType)
 	local existing = Remotes:FindFirstChild(name)
 	if existing then return existing end
-	
+
 	local remote
 	if remoteType == "Event" then
 		remote = Instance.new("RemoteEvent")
 	elseif remoteType == "Function" then
 		remote = Instance.new("RemoteFunction")
 	end
-	
+
 	remote.Name = name
 	remote.Parent = Remotes
 	return remote
@@ -53,6 +53,7 @@ createRemote("DamageKnockback", "Event")
 createRemote("FindPlayers", "Event")
 createRemote("Connect", "Event")
 createRemote("ShowObj", "Event")
+createRemote("HighlightTargets")
 createRemote("Delete", "Event")
 
 -- Status effect remotes
@@ -66,7 +67,7 @@ end
 local function createStatusRemote(name)
 	local existing = statusEffects:FindFirstChild(name)
 	if existing then return existing end
-	
+
 	local remote = Instance.new("RemoteEvent")
 	remote.Name = name
 	remote.Parent = statusEffects

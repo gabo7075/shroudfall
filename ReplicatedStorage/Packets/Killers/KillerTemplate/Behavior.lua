@@ -364,6 +364,9 @@ function Behavior:Ability3()
 				if victimPlayer then
 					Remotes.GiveEffect:FireClient(victimPlayer, "slow", 3, 1)
 				end
+				
+				local LMSManager = require(ReplicatedStorage.Modules.LMSManager)
+				LMSManager.highlightVictim(self.Player, victim, 3, Color3.fromRGB(0, 255, 0))
 			end,
 			Vector3.new(6.5,6.5,7),
 			Vector3.new(0,0,-2),

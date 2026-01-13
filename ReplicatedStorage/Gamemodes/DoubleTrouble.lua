@@ -268,16 +268,6 @@ function module.checkForLMS()
 		-- Set timer to 44 seconds
 		timerManager.setTime(44)
 
-		-- Remove terror sounds and map music
-		for i = 1, #numOfKillers do
-			if numOfKillers[i].Character then
-				local terrorSounds = numOfKillers[i].Character:FindFirstChild("TerrorSounds")
-				if terrorSounds then
-					terrorSounds:Destroy()
-				end
-			end
-		end
-
 		local currentMap = workspace.GameDebris:FindFirstChild("CurrentMap")
 		if currentMap then
 			local mapMusic = currentMap:FindFirstChild("Music")

@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 local hitIndicator = require(ReplicatedStorage.HitIndicator)
 local statusMod = require(Players.LocalPlayer.PlayerGui.GameGui.StatusEffectsModule)
 local gameMod = require(ReplicatedStorage.GameModule)
+local lmsmanager = require(ReplicatedStorage.Modules.LMSManager)
 
 -- Remotes
 local remotes = ReplicatedStorage.Remotes
@@ -72,6 +73,16 @@ end)
 
 remotes.FindPlayers.OnClientEvent:Connect(function(victims, length)
 	gameMod.findPlayers(victims, length)
+end)
+
+remotes:WaitForChild("HighlightTargets").OnClientEvent:Connect(function(action, arg1, arg2, arg3)
+	if action == "FindPlayers" then
+		-- arg1: targets (table), arg2: length, arg3: color
+		lmsmanager.findPlayers(arg1, arg2, arg3)
+	elseif action == "HighlightVictim" then
+		-- arg1: victim (Model/Character), arg2: length, arg3: color
+		lmsmanager.highlightVictim(arg1, arg2, arg3)
+	end
 end)
 
 -- Animation setup
@@ -218,8 +229,7 @@ local function setupHumanoidEvents()
 	table.insert(humConnections, hum.Died:Connect(function() 
 		pose = "Dead"
 		local killers = Teams.Killers:GetPlayers()
-		if #killers == 1 and killers[1].Character and killers[1].Character:FindFirstChild("TerrorSounds") then
-			killers[1].Character.TerrorSounds:Destroy()
+		if #killers == 1 and killers[1].Character then
 			workspace.LobbyMusic:Play()
 		end
 	end))
