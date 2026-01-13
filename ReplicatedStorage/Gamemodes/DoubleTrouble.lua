@@ -265,6 +265,11 @@ function module.checkForLMS()
 			lmsMusic:Play()
 		end
 
+		-- Stop local terror radius sounds on all clients
+		if remotes:FindFirstChild("StopTerrorSounds") then
+			remotes.StopTerrorSounds:FireAllClients()
+		end
+
 		-- Set timer to 44 seconds
 		timerManager.setTime(44)
 
