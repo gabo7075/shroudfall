@@ -288,7 +288,14 @@ function Behavior:Ability1()
 		self:CreateMeleeHitbox(
 			self.Config.Ability1Damage or 25,
 			self.Config.Ability1Knockback or 15,
-			"SurvivorHit"
+			"SurvivorHit",
+			nil,
+			Vector3.new(4.3,5.2,5.2),
+			Vector3.new(0,0,-1.5),
+			7,
+			0.03,
+			0.125,
+			"Hit"
 		)
 	end)
 
@@ -341,12 +348,17 @@ function Behavior:Ability3()
 			self.Config.Ability3Knockback or 30,
 			"Ability3Hit",
 			function(victim)
-				-- Apply slow effect
 				local victimPlayer = Players:GetPlayerFromCharacter(victim)
 				if victimPlayer then
 					Remotes.GiveEffect:FireClient(victimPlayer, "slow", 3, 1)
 				end
-			end
+			end,
+			Vector3.new(6.5,6.5,7),
+			Vector3.new(0,0,-2),
+			10,
+			0.025,
+			0.2,
+			"Hit"
 		)
 	end)
 
@@ -389,15 +401,22 @@ end
 -- HITBOX HELPER
 -- ===============================================
 
-function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback)
+function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback, hitboxSize, hitboxOffset, hitboxCount, hitboxDelay, hitboxDuration, hitSoundName)
+	hitboxSize = hitboxSize or Vector3.new(4.3, 5.2, 5.2)
+	hitboxOffset = hitboxOffset or Vector3.new(0, 0, -1.5)
+	hitboxCount = hitboxCount or 7
+	hitboxDelay = hitboxDelay or 0.03
+	hitboxDuration = hitboxDuration or 0.125
+	hitSoundName = hitSoundName or "Hit"
+
 	local attachment = Instance.new("Attachment")
 	attachment.Parent = self.HumanoidRootPart
-	attachment.Position = Vector3.new(0, 0, -1.5)
+	attachment.Position = hitboxOffset
 
 	local hitTable = {}
 
-	for i = 1, 7 do
-		local hitbox = HitboxMod.create(attachment.WorldCFrame, Vector3.new(4.3, 5.2, 5.2), 0.125)
+	for i = 1, hitboxCount do
+		local hitbox = HitboxMod.create(attachment.WorldCFrame, hitboxSize, hitboxDuration)
 
 		hitbox.Touched:Connect(function(hit)
 			local victim = hit.Parent
@@ -419,8 +438,8 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 
 			-- Sound
 			if self.Character:FindFirstChild("Torso") then
-				local hit = self.Character.Torso:FindFirstChild("Hit")
-				if hit then hit:Play() end
+				local hitSound = self.Character.Torso:FindFirstChild(hitSoundName)
+				if hitSound then hitSound:Play() end
 			end
 
 			-- Knockback
@@ -440,7 +459,7 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 			end
 		end)
 
-		task.wait()
+		task.wait(hitboxDelay)
 	end
 
 	attachment:Destroy()
