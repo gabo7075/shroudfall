@@ -56,6 +56,9 @@ players.PlayerAdded:Connect(function(plr)
 						if lmsMusic then
 							lmsMusic:Play()
 						end
+						if remotes:FindFirstChild("StopTerrorSounds") then
+							remotes.StopTerrorSounds:FireAllClients(true)
+						end
 						timerManager.setTime(44)
 					else
 						-- Standard LMS with 1 killer
@@ -64,6 +67,9 @@ players.PlayerAdded:Connect(function(plr)
 						local lmsMusic = workspace.LMS:FindFirstChild(musicName)
 						if lmsMusic then
 							lmsMusic:Play()
+						end
+						if remotes:FindFirstChild("StopTerrorSounds") then
+							remotes.StopTerrorSounds:FireAllClients(true)
 						end
 						timerManager.setTime(newTime)
 					end
@@ -116,6 +122,9 @@ players.PlayerRemoving:Connect(function(plr)
 				local lmsMusic = workspace.LMS:FindFirstChild("LMSDoubleTrouble")
 				if lmsMusic then
 					lmsMusic:Play()
+				end
+				if remotes:FindFirstChild("StopTerrorSounds") then
+					remotes.StopTerrorSounds:FireAllClients(true)
 				end
 			else
 				-- Standard LMS

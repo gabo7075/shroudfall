@@ -6,6 +6,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+
 -- CONFIG GLOBAL (valores por defecto si el Config no existe)
 local DEFAULT_OUTER_RADIUS = 60
 local DEFAULT_L1_MIN = 45

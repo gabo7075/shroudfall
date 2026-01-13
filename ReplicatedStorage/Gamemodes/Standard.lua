@@ -199,7 +199,7 @@ function module.checkForLMS()
 
 		-- Tell clients to stop their local terror radius sounds
 		if remotes:FindFirstChild("StopTerrorSounds") then
-			remotes.StopTerrorSounds:FireAllClients()
+			remotes.StopTerrorSounds:FireAllClients(true)
 		end
 
 		-- Set the new time
