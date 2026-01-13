@@ -119,7 +119,8 @@ end
 
 function module.speed(length, amount, visible)
 	local clone = guiMod.createEffectClone("Speed", length, amount)
-	char:SetAttribute("IntendedWalkSpeed", char:GetAttribute("IntendedWalkSpeed") + (2.5 * amount))
+	local delta = 2.5 * amount
+	remotes.StatusEffects.Speed:FireServer(char, delta)
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -128,12 +129,13 @@ function module.speed(length, amount, visible)
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
 
-	char:SetAttribute("IntendedWalkSpeed", char:GetAttribute("IntendedWalkSpeed") - (2.5 * amount))
+	remotes.StatusEffects.Speed:FireServer(char, -delta)
 end
 
 function module.slow(length, amount, visible)
 	local clone = guiMod.createEffectClone("Slowness", length, amount)
-	char:SetAttribute("IntendedWalkSpeed", char:GetAttribute("IntendedWalkSpeed") - (2.5 * amount))
+	local delta = 2.5 * amount
+	remotes.StatusEffects.Slow:FireServer(char, delta)
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -142,7 +144,7 @@ function module.slow(length, amount, visible)
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
 
-	char:SetAttribute("IntendedWalkSpeed", char:GetAttribute("IntendedWalkSpeed") + (2.5 * amount))
+	remotes.StatusEffects.Slow:FireServer(char, -delta)
 end
 
 function module.invisible(length, amount, visible)

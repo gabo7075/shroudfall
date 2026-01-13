@@ -80,5 +80,8 @@ createStatusRemote("Poison")
 createStatusRemote("Burn")
 createStatusRemote("Infected")
 createStatusRemote("Undetectable")
+createStatusRemote("Speed")
+createStatusRemote("Slow")
+createStatusRemote("SetAttribute")
 
 print("✓ Remote events setup complete")
