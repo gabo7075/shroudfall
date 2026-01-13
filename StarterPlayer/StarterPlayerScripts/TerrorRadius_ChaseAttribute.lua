@@ -15,8 +15,8 @@ local UPDATE_INTERVAL = 0.12
 local CROSSFADE_TIME = 0.5
 local MAX_VOLUME = 0.6
 
--- Cache for rig -> killer name mapping
-local rigToKillerName = {}
+-- Cache for rig -> config mapping
+local rigConfigCache = {}
 
 -- Helper: get character root
 local function getCharRoot()
@@ -58,46 +58,35 @@ end
 -- Get killer name from rig using attribute
 local function getKillerNameFromRig(rig)
 	if not rig then return nil end
-	
-	-- Check cache first
-	if rigToKillerName[rig] then
-		return rigToKillerName[rig]
-	end
-	
-	-- Try to get from attribute "KillerName" or "CharacterName"
+
 	local killerName = nil
 	pcall(function()
-		killerName = rig:GetAttribute("KillerName") or rig:GetAttribute("CharacterName")
+		killerName = rig:GetAttribute("CharacterName")
 	end)
-	
-	-- Cache it if found
-	if killerName then
-		rigToKillerName[rig] = killerName
-	end
-	
+
 	return killerName
 end
 
 -- Load Config module for a killer
 local function loadKillerConfig(killerName)
 	if not killerName then return nil end
-	
+
 	local configPath = ReplicatedStorage:FindFirstChild("Packets")
 	if not configPath then return nil end
-	
+
 	configPath = configPath:FindFirstChild("Killers")
 	if not configPath then return nil end
-	
+
 	configPath = configPath:FindFirstChild(killerName)
 	if not configPath then return nil end
-	
+
 	local configModule = configPath:FindFirstChild("Config")
 	if not configModule or not configModule:IsA("ModuleScript") then return nil end
-	
+
 	local success, config = pcall(function()
 		return require(configModule)
 	end)
-	
+
 	return success and config or nil
 end
 
@@ -113,12 +102,17 @@ local function getRigConfig(rig)
 
 	if not rig then return config end
 
+	-- Check cache first
+	if rigConfigCache[rig] then
+		return rigConfigCache[rig]
+	end
+
 	local killerName = getKillerNameFromRig(rig)
 	if not killerName then return config end
-	
+
 	local killerConfig = loadKillerConfig(killerName)
 	if not killerConfig or not killerConfig.TerrorRadius then return config end
-	
+
 	local tr = killerConfig.TerrorRadius
 	config.outerRadius = tr.OuterRadius or DEFAULT_OUTER_RADIUS
 	config.l1Min = tr.L1_Min or DEFAULT_L1_MIN
@@ -126,16 +120,19 @@ local function getRigConfig(rig)
 	config.l3Min = tr.L3_Min or DEFAULT_L3_MIN
 	config.useVolume = tr.UseVolume or false
 
+	-- Cache the config
+	rigConfigCache[rig] = config
+
 	return config
 end
 
 -- Create sounds from Config data
 local function createSoundsFromConfig(rig, terrorSoundsConfig)
 	if not terrorSoundsConfig or #terrorSoundsConfig == 0 then return nil end
-	
+
 	local sounds = {}
 	local maxVolumes = {}
-	
+
 	for i, soundData in ipairs(terrorSoundsConfig) do
 		local sound = Instance.new("Sound")
 		sound.Name = soundData.Name or ("Layer" .. i)
@@ -144,33 +141,33 @@ local function createSoundsFromConfig(rig, terrorSoundsConfig)
 		sound.Looped = true
 		sound.Playing = false
 		sound.Parent = rig.PrimaryPart or rig:FindFirstChild("HumanoidRootPart")
-		
+
 		-- Store the configured volume
 		maxVolumes[i] = soundData.Volume or MAX_VOLUME
-		
+
 		-- Mark which one is the chase sound
 		if soundData.Chase == true then
 			sound:SetAttribute("Chase", true)
 		end
-		
+
 		table.insert(sounds, sound)
 	end
-	
+
 	return sounds, maxVolumes
 end
 
 -- Load sounds from Config instead of rig folder
 local function loadSoundsFromConfig(rig)
 	if not rig then return nil end
-	
+
 	local killerName = getKillerNameFromRig(rig)
 	if not killerName then return nil end
-	
+
 	local killerConfig = loadKillerConfig(killerName)
 	if not killerConfig or not killerConfig.TerrorRadius or not killerConfig.TerrorRadius.Sounds then 
 		return nil 
 	end
-	
+
 	local terrorSounds = killerConfig.TerrorRadius.Sounds
 	return createSoundsFromConfig(rig, terrorSounds)
 end
@@ -226,10 +223,10 @@ local rigStateCache = {}
 
 local function ensureRigState(rig)
 	if rigStateCache[rig] then return rigStateCache[rig] end
-	
+
 	local sounds, maxVolumes = loadSoundsFromConfig(rig)
 	if not sounds then return nil end
-	
+
 	local config = getRigConfig(rig)
 	local state = {
 		sounds = sounds,
@@ -248,12 +245,12 @@ local function ensureRigState(rig)
 			break
 		end
 	end
-	
+
 	-- Fallback to layer 4 if no chase sound found
 	if not state.chaseSoundIndex and #sounds >= 4 then
 		state.chaseSoundIndex = 4
 	end
-	
+
 	rigStateCache[rig] = state
 	return state
 end
@@ -272,7 +269,7 @@ local function cleanupRigState(rig)
 		end
 	end
 	rigStateCache[rig] = nil
-	rigToKillerName[rig] = nil
+	rigConfigCache[rig] = nil
 end
 
 -- Main loop

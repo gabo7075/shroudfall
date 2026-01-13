@@ -24,7 +24,7 @@ return {
 		StunEnd = "rbxassetid://81361634197851",
 		Punch = "rbxassetid://136672494666856",
 	},
-	
+
 	-- Sounds
 	Sounds = {
 		Swing = {
@@ -81,36 +81,32 @@ return {
 		L1_Min = 45,       -- Distance to start Layer 1
 		L2_Min = 30,       -- Distance to start Layer 2
 		L3_Min = 6,        -- Distance to start Layer 3/Chase
-		UseVolume = false, -- Whether to use the volumes specified in Sounds below
-		
+		UseVolume = true, -- Whether to use the volumes specified in Sounds below
+
 		-- Terror Radius Audio Layers
 		Sounds = {
-			-- Layer 1: Distant heartbeat (furthest from killer)
 			{
 				Name = "Layer1",
-				Id = "rbxassetid://YOUR_LAYER1_SOUND_ID",
-				Volume = 0.4,
+				Id = "rbxassetid://113143424068700",
+				Volume = 1.1,
 				Chase = false
 			},
-			-- Layer 2: Medium intensity
 			{
 				Name = "Layer2",
-				Id = "rbxassetid://YOUR_LAYER2_SOUND_ID",
-				Volume = 0.5,
+				Id = "rbxassetid://120329768709183",
+				Volume = 1.1,
 				Chase = false
 			},
-			-- Layer 3: High intensity
 			{
 				Name = "Layer3",
-				Id = "rbxassetid://YOUR_LAYER3_SOUND_ID",
-				Volume = 0.6,
+				Id = "rbxassetid://137879051377096",
+				Volume = 1.1,
 				Chase = false
 			},
-			-- Layer 4: Chase music (only plays for killer when near survivor)
 			{
 				Name = "Chase",
-				Id = "rbxassetid://YOUR_CHASE_SOUND_ID",
-				Volume = 0.6,
+				Id = "rbxassetid://72843492882569",
+				Volume = 1.1,
 				Chase = true  -- Mark this as the chase layer
 			}
 		}

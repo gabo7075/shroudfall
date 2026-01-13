@@ -96,6 +96,8 @@ function module.loadAsCharacter(player, characterName, characterSkin, team)
 	-- 8. Mark attributes
 	if team == teams.Killers then
 		player.Character:SetAttribute("TerrorRig", true)
+		-- Set the character name for terror radius script to find Config
+		player.Character:SetAttribute("CharacterName", characterName)
 	end
 
 	-- 9. Initialize Server-Side Behavior
