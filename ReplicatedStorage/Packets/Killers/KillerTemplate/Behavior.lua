@@ -37,6 +37,20 @@ function Behavior.new(player, character, config)
 	self.Stunned = false
 	self.NearSurvivor = false
 	self.WalkingBackwards = false
+	
+	-- Initialize sounds from config
+	self.Sounds = {}
+	if self.Config.Sounds then
+		for name, data in pairs(self.Config.Sounds) do
+			local sound = Instance.new("Sound")
+			sound.Name = name
+			sound.SoundId = data.Id or ""
+			sound.Volume = data.Volume or 1
+			sound.PlaybackSpeed = data.PlaybackSpeed or 1
+			sound.Parent = self.HumanoidRootPart -- or Torso if you prefer
+			self.Sounds[name] = sound
+		end
+	end
 
 	-- Ability cooldowns
 	self.AbilityCooldowns = {
@@ -277,11 +291,8 @@ function Behavior:Ability1()
 
 	-- Sound
 	task.delay(0.15, function()
-		if self.Character and self.Character:FindFirstChild("Torso") then
-			local swing = self.Character.Torso:FindFirstChild("Swing")
-			if swing then
-				swing:Play()
-			end
+		if self.Sounds.Swing then
+			self.Sounds.Swing:Play()
 		end
 	end)
 
@@ -338,9 +349,8 @@ function Behavior:Ability3()
 	Remotes.PlayAnimation:FireClient(self.Player, "Punch")
 
 	task.delay(0.15, function()
-		if self.Character and self.Character:FindFirstChild("Torso") then
-			local swing = self.Character.Torso:FindFirstChild("Swing")
-			if swing then swing:Play() end
+		if self.Sounds.Swing then
+			self.Sounds.Swing:Play()
 		end
 	end)
 
@@ -438,9 +448,8 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 
 			Remotes.HitIndicator:FireClient(self.Player, victim.HumanoidRootPart.Position, damage)
 
-			if self.Character:FindFirstChild("Torso") then
-				local hitSound = self.Character.Torso:FindFirstChild(hitSoundName)
-				if hitSound then hitSound:Play() end
+			if hitSoundName and self.Sounds[hitSoundName] then
+				self.Sounds[hitSoundName]:Play()
 			end
 
 			if knockback and knockback > 0 then
