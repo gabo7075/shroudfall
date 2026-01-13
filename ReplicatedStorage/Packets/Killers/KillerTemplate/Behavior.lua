@@ -260,6 +260,8 @@ function Behavior:Ability1()
 
 	-- Unequip tools
 	self.Humanoid:UnequipTools()
+	
+	local attackCFrame = self.HumanoidRootPart.CFrame
 
 	-- Play animation
 	Remotes.PlayAnimation:FireClient(self.Player, "Punch")
@@ -409,6 +411,7 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 	hitboxDuration = hitboxDuration or 0.125
 	hitSoundName = hitSoundName or "Hit"
 
+	-- ✅ Create attachment that will continuously track character position
 	local attachment = Instance.new("Attachment")
 	attachment.Parent = self.HumanoidRootPart
 	attachment.Position = hitboxOffset
@@ -416,7 +419,8 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 	local hitTable = {}
 
 	for i = 1, hitboxCount do
-		local hitbox = HitboxMod.create(attachment.WorldCFrame, hitboxSize, hitboxDuration)
+		-- ✅ Pass the attachment itself, not a static CFrame value
+		local hitbox = HitboxMod.create(attachment, hitboxSize, hitboxDuration)
 
 		hitbox.Touched:Connect(function(hit)
 			local victim = hit.Parent
@@ -429,31 +433,25 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 			hitbox.BrickColor = BrickColor.new("Lime green")
 			table.insert(hitTable, victim)
 
-			-- Damage
 			local victimHum = victim:FindFirstChildWhichIsA("Humanoid")
 			victimHum.Health = victimHum.Health - damage
 
-			-- Hit indicator
 			Remotes.HitIndicator:FireClient(self.Player, victim.HumanoidRootPart.Position, damage)
 
-			-- Sound
 			if self.Character:FindFirstChild("Torso") then
 				local hitSound = self.Character.Torso:FindFirstChild(hitSoundName)
 				if hitSound then hitSound:Play() end
 			end
 
-			-- Knockback
 			if knockback and knockback > 0 then
 				local direction = (victim.HumanoidRootPart.Position - self.HumanoidRootPart.Position).Unit
 				self:ApplyKnockback(victim, direction, knockback)
 			end
 
-			-- Reward (NOW HANDLED ON SERVER)
 			if rewardType then
 				self:GiveReward(rewardType)
 			end
 
-			-- Custom callback
 			if onHitCallback then
 				onHitCallback(victim)
 			end
@@ -462,7 +460,10 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 		task.wait(hitboxDelay)
 	end
 
-	attachment:Destroy()
+	-- ✅ Destroy attachment after all hitboxes are done
+	task.delay(hitboxDuration + 0.1, function()
+		attachment:Destroy()
+	end)
 end
 
 function Behavior:ApplyKnockback(victim, direction, power)
@@ -533,7 +534,7 @@ end
 -- ✅ FIXED: Now handles rewards on SERVER SIDE
 function Behavior:GiveReward(rewardType)
 	if not self.Player or not self.Player.Parent then return end
-	
+
 	local customRewards = self.Config.CustomRewards or {}
 	local customReward = customRewards[rewardType]
 
