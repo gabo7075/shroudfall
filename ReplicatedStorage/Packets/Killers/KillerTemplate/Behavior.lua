@@ -448,7 +448,7 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 				self:ApplyKnockback(victim, direction, knockback)
 			end
 
-			-- Reward
+			-- Reward (NOW HANDLED ON SERVER)
 			if rewardType then
 				self:GiveReward(rewardType)
 			end
@@ -530,23 +530,85 @@ function Behavior:IsTeammate(victim)
 	return false
 end
 
+-- ✅ FIXED: Now handles rewards on SERVER SIDE
 function Behavior:GiveReward(rewardType)
+	if not self.Player or not self.Player.Parent then return end
+	
 	local customRewards = self.Config.CustomRewards or {}
-	local reward = customRewards[rewardType]
+	local customReward = customRewards[rewardType]
 
-	if reward then
+	if customReward then
+		-- Handle custom reward
 		local killerName = self.Player.EquippedKiller.Value or "Killer"
-		local message = string.format(reward.messageTemplate or "%s", killerName)
+		local message = string.format(customReward.messageTemplate or "%s", killerName)
+		local money = customReward.money or 0
+		local malice = customReward.malice or 0
 
-		Remotes.GiveReward:FireClient(self.Player, message, reward.money, reward.malice)
+		-- Add money to leaderstats (SERVER SIDE)
+		local leaderstats = self.Player:FindFirstChild("leaderstats")
+		if not leaderstats then
+			leaderstats = Instance.new("Folder")
+			leaderstats.Name = "leaderstats"
+			leaderstats.Parent = self.Player
+		end
+
+		local moneyVal = leaderstats:FindFirstChild("Money")
+		if not moneyVal then
+			moneyVal = Instance.new("IntValue")
+			moneyVal.Name = "Money"
+			moneyVal.Value = 0
+			moneyVal.Parent = leaderstats
+		end
+		moneyVal.Value = moneyVal.Value + money
+
+		-- Add malice to leaderstats (SERVER SIDE)
+		local maliceVal = leaderstats:FindFirstChild("Killer Chance")
+		if not maliceVal then
+			maliceVal = Instance.new("NumberValue")
+			maliceVal.Name = "Killer Chance"
+			maliceVal.Value = 0
+			maliceVal.Parent = leaderstats
+		end
+		maliceVal.Value = maliceVal.Value + malice
+
+		-- Show popup to client
+		Remotes.GiveReward:FireClient(self.Player, message, money, malice)
 	else
-		-- Use default rewards (resolve via RewardModule)
-		local rewardModule = require(ReplicatedStorage:WaitForChild("RewardModule"))
-		local defaultReward = rewardModule.DefaultRewards[rewardType]
+		-- Handle default reward
+		local defaultReward = RewardModule.DefaultRewards[rewardType]
 		if defaultReward then
-			Remotes.GiveReward:FireClient(self.Player, defaultReward.message, defaultReward.money, defaultReward.malice)
-		else
-			Remotes.GiveReward:FireClient(self.Player, rewardType, 0, 0)
+			local money = defaultReward.money or 0
+			local malice = defaultReward.malice or 0
+
+			-- Add money to leaderstats (SERVER SIDE)
+			local leaderstats = self.Player:FindFirstChild("leaderstats")
+			if not leaderstats then
+				leaderstats = Instance.new("Folder")
+				leaderstats.Name = "leaderstats"
+				leaderstats.Parent = self.Player
+			end
+
+			local moneyVal = leaderstats:FindFirstChild("Money")
+			if not moneyVal then
+				moneyVal = Instance.new("IntValue")
+				moneyVal.Name = "Money"
+				moneyVal.Value = 0
+				moneyVal.Parent = leaderstats
+			end
+			moneyVal.Value = moneyVal.Value + money
+
+			-- Add malice to leaderstats (SERVER SIDE)
+			local maliceVal = leaderstats:FindFirstChild("Killer Chance")
+			if not maliceVal then
+				maliceVal = Instance.new("NumberValue")
+				maliceVal.Name = "Killer Chance"
+				maliceVal.Value = 0
+				maliceVal.Parent = leaderstats
+			end
+			maliceVal.Value = maliceVal.Value + malice
+
+			-- Show popup to client
+			Remotes.GiveReward:FireClient(self.Player, defaultReward.message, money, malice)
 		end
 	end
 end
