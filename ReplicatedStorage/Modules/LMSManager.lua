@@ -119,4 +119,44 @@ end
 
 -- ... (El resto de funciones como checkLMSConditions y stopAllLMSMusic se quedan igual)
 
+-- Determine LMS music and time based on killer/survivor matchup
+function module.checkLMSConditions(killer, survivor)
+    -- Defensive checks
+    if not killer or not survivor then
+        return "LMSDefault", 44
+    end
+
+    local killerName = ""
+    local survivorName = ""
+
+    if killer:FindFirstChild("EquippedKiller") and killer.EquippedKiller.Value then
+        killerName = killer.EquippedKiller.Value
+    end
+    if survivor:FindFirstChild("EquippedSurvivor") and survivor.EquippedSurvivor.Value then
+        survivorName = survivor.EquippedSurvivor.Value
+    end
+
+    -- Simple rule set:
+    -- If the characters match (same name) play a special matching track,
+    -- otherwise play the default LMS track. Adjust times as desired.
+    if killerName ~= "" and killerName == survivorName then
+        return "LMSMatch", 30
+    end
+
+    -- Return a default LMS track and time
+    return "LMSDefault", 44
+end
+
+-- Stop all LMS-related music in workspace.LMS
+function module.stopAllLMSMusic()
+    local lmsFolder = workspace:FindFirstChild("LMS")
+    if not lmsFolder then return end
+
+    for _, child in ipairs(lmsFolder:GetChildren()) do
+        if child:IsA("Sound") then
+            pcall(function() child:Stop() end)
+        end
+    end
+end
+
 return module
