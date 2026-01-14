@@ -277,16 +277,6 @@ remotes.StatusEffects.Slow.OnServerEvent:Connect(function(plr, targetChar, delta
 	targetChar:SetAttribute("IntendedWalkSpeed", math.max(0, current + delta))
 end)
 
--- Generic attribute setter (validated): remotes.StatusEffects.SetAttribute
-remotes.StatusEffects.SetAttribute.OnServerEvent:Connect(function(plr, targetChar, attrName, value)
-	if not targetChar or not targetChar.Parent then return end
-	if plr.Character ~= targetChar then return end
-	if type(attrName) ~= "string" then return end
-	-- Only allow primitive types for safety
-	if type(value) ~= "number" and type(value) ~= "boolean" and type(value) ~= "string" then return end
-	targetChar:SetAttribute(attrName, value)
-end)
-
 remotes.Delete.OnServerEvent:Connect(function(plr, obj)
 	obj:Destroy()
 end)
