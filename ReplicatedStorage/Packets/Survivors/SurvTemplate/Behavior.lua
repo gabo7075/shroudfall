@@ -63,6 +63,7 @@ function Behavior.new(player, character, config)
 	self.Humanoid.MaxHealth = config.Health or 100
 	self.Humanoid.Health = config.Health or 100
 	-- Initialize
+	self:SetupAnimations()
 	self:SetupRemotes()
 	self:StartLoops()
 	self:SetupAbilities()
@@ -83,6 +84,14 @@ end
 -- ===============================================
 -- REMOTE SETUP
 -- ===============================================
+function Behavior:SetupAnimations()
+	-- Send animation IDs to client so they can be loaded on-demand
+	task.spawn(function()
+		task.wait(0.2) -- Small delay to ensure client is ready
+		Remotes.SetupAnimations:FireClient(self.Player, self.Config.Animations or {}, "Survivor")
+	end)
+end
+
 function Behavior:SetupRemotes()
 	-- Input handling
 	table.insert(self.Connections, Remotes.CharacterInput.OnServerEvent:Connect(function(plr, inputType, ...)
@@ -336,7 +345,7 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 	hitboxDelay = hitboxDelay or 0.03
 	hitboxDuration = hitboxDuration or 0.125
 	hitSoundName = hitSoundName or "Hit"
-	stunTime = stunTime or 0 -- Default to no stun
+	stunTime = stunTime or 0
 
 	local hitTable = {}
 
@@ -345,58 +354,76 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 
 		hitbox.Touched:Connect(function(hit)
 			local victim = hit.Parent
-
-			if not victim:FindFirstChildWhichIsA("Humanoid") then return end
+			if not victim or not victim:FindFirstChildWhichIsA("Humanoid") then return end
 			if table.find(hitTable, victim) then return end
 			if victim == self.Character then return end
 			if self:IsTeammate(victim) then return end
 
-			hitbox.BrickColor = BrickColor.new("Lime green")
 			table.insert(hitTable, victim)
 
 			local victimHum = victim:FindFirstChildWhichIsA("Humanoid")
 			local victimPlayer = Players:GetPlayerFromCharacter(victim)
 
 			local actualDamageDealt = damage
+			local victimBehavior = nil
 
-			-- Apply damage through victim's behavior system
+			-- APLICAR DAÑO (inmediato)
 			if victimPlayer then
 				local BehaviorRegistry = require(game.ServerScriptService.BehaviorRegistry)
-				local victimBehavior = BehaviorRegistry.get(victimPlayer)
+				victimBehavior = BehaviorRegistry.get(victimPlayer)
 				if victimBehavior and type(victimBehavior.TakeDamage) == "function" then
-					-- Pass stunTime to victim's TakeDamage function
-					actualDamageDealt = victimBehavior:TakeDamage(damage, stunTime)
+					-- Llamamos TakeDamage pero PASAMOS stunTime = 0
+					-- (el stun se aplica abajo en este mismo tick)
+					actualDamageDealt = victimBehavior:TakeDamage(damage, 0) or damage
 				else
-					warn("[Hitbox] No behavior found for", victimPlayer.Name, "- applying direct damage")
 					victimHum.Health = math.max(0, victimHum.Health - damage)
 					actualDamageDealt = damage
 				end
 			else
-				-- Non-player victim (NPC)
 				victimHum.Health = math.max(0, victimHum.Health - damage)
 				actualDamageDealt = damage
 			end
 
-			-- Show hit indicator to attacker
+			-- APLICAR STUN (inmediato)
+			if stunTime and stunTime > 0 then
+				-- Si la behavior tiene Stun, usarla (no bloquear)
+				if victimBehavior and type(victimBehavior.Stun) == "function" then
+					task.spawn(function()
+						-- No pasamos por waits en el servidor principal; la behavior maneja anims/flags internamente
+						pcall(function() victimBehavior:Stun(stunTime) end)
+					end)
+				else
+					-- Fallback: usar atributo Helpless
+					if victim and victim.Parent then
+						victim:SetAttribute("Helpless", stunTime)
+						task.delay(stunTime, function()
+							if victim and victim.Parent then
+								pcall(function() victim:SetAttribute("Helpless", 0) end)
+							end
+						end)
+					end
+				end
+			end
+
+			-- HIT INDICATOR (inmediato)
 			Remotes.HitIndicator:FireClient(self.Player, victim.HumanoidRootPart.Position, actualDamageDealt)
 
-			-- Play hit sound
+			-- SONIDO (inmediato)
 			if hitSoundName and self.Sounds[hitSoundName] then
 				self.Sounds[hitSoundName]:Play()
 			end
 
-			-- Apply knockback
+			-- KNOCKBACK (inmediato)
 			if knockback and knockback > 0 then
 				local direction = (victim.HumanoidRootPart.Position - self.HumanoidRootPart.Position).Unit
 				self:ApplyKnockback(victim, direction, knockback)
 			end
 
-			-- Give reward to attacker
+			-- REWARD + CALLBACK (inmediato)
 			if rewardType then
 				self:GiveReward(rewardType)
 			end
 
-			-- Execute custom callback
 			if onHitCallback then
 				onHitCallback(victim)
 			end
