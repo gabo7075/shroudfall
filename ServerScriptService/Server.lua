@@ -18,6 +18,23 @@ local function updateAttribute(char, attrName, amount)
 	end
 end
 
+local function stopTerrorSoundsReliable()
+	-- Set attribute first
+	replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
+
+	-- Wait a frame to ensure attribute replicates
+	task.wait()
+
+	-- Fire to all clients
+	if remotes:FindFirstChild("StopTerrorSounds") then
+		remotes.StopTerrorSounds:FireAllClients()
+		print("[Server] Fired StopTerrorSounds to all clients")
+	end
+
+	-- Wait another frame to ensure clients process it
+	task.wait(0.1)
+end
+
 starterPlayer.CameraMaxZoomDistance = 30
 starterPlayer.EnableMouseLockOption = false
 
@@ -58,11 +75,7 @@ players.PlayerAdded:Connect(function(plr)
 						if lmsMusic then
 							lmsMusic:Play()
 						end
-						if remotes:FindFirstChild("StopTerrorSounds") then
-							-- servidor
-							remotes.StopTerrorSounds:FireAllClients()
-							replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
-						end
+						stopTerrorSoundsReliable()
 						timerManager.setTime(44)
 					else
 						-- Standard LMS with 1 killer
@@ -72,10 +85,7 @@ players.PlayerAdded:Connect(function(plr)
 						if lmsMusic then
 							lmsMusic:Play()
 						end
-						if remotes:FindFirstChild("StopTerrorSounds") then
-							remotes.StopTerrorSounds:FireAllClients()
-							replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
-						end
+						stopTerrorSoundsReliable()
 						timerManager.setTime(newTime)
 					end
 
@@ -128,10 +138,7 @@ players.PlayerRemoving:Connect(function(plr)
 				if lmsMusic then
 					lmsMusic:Play()
 				end
-				if remotes:FindFirstChild("StopTerrorSounds") then
-					remotes.StopTerrorSounds:FireAllClients()
-					replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
-				end
+				stopTerrorSoundsReliable()
 			else
 				-- Standard LMS
 				gameMod.setTime(75)

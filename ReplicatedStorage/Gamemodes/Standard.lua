@@ -191,17 +191,26 @@ function module.checkForLMS()
 		-- Get LMS music and time based on conditions
 		local musicName, newTime = lmsManager.checkLMSConditions(killer, survivor)
 
+		-- ✅ FIX: Stop terror sounds BEFORE playing LMS music
+		if remotes:FindFirstChild("StopTerrorSounds") then
+			-- Set attribute first
+			replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
+
+			-- Wait a frame
+			task.wait()
+
+			-- Fire to all clients
+			remotes.StopTerrorSounds:FireAllClients()
+			print("[Standard] Stopped terror sounds for LMS")
+
+			-- Wait to ensure clients process it
+			task.wait(0.2)
+		end
+
 		-- Play the appropriate music
 		local lmsMusic = workspace.LMS:FindFirstChild(musicName)
 		if lmsMusic then
 			lmsMusic:Play()
-		end
-
-		-- Tell clients to stop their local terror radius sounds
-		if remotes:FindFirstChild("StopTerrorSounds") then
-			-- servidor
-			remotes.StopTerrorSounds:FireAllClients()
-			replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
 		end
 
 		-- Set the new time

@@ -1,3 +1,7 @@
+-- ============================================
+-- FILE 1: CharacterClientHandler.lua (FULL REPLACEMENT)
+-- ============================================
+
 -- LocalScript: StarterPlayer > StarterCharacterScripts > CharacterClientHandler
 -- Universal handler for client-side UI, animations, and input (Killers AND Survivors)
 
@@ -23,7 +27,7 @@ local guiMod = require(gameGui.GuiModule)
 local wantsToRun = false
 local abilities = {}
 local animations = {}
-local loadedAnimations = {} -- ✅ Cache for dynamically loaded animations
+local animationIds = {} -- ✅ Store ALL animation IDs here
 local animationsReady = false
 local characterType = nil
 local abilitiesRequested = false
@@ -72,23 +76,33 @@ local function createAndLoadAnim(id, priority)
 	return track
 end
 
--- ✅ Function to load an animation on-demand
-local function loadAnimationOnDemand(animName, animId, priority)
-	if not loadedAnimations[animName] then
-		local success, track = pcall(function()
-			return createAndLoadAnim(animId, priority)
-		end)
-
-		if success then
-			loadedAnimations[animName] = track
-			print("[Client] Loaded animation on-demand:", animName)
-		else
-			warn("[Client] Failed to load animation:", animName, track)
-			return nil
-		end
+-- ✅ FIX: Load animation on-demand from stored IDs
+local function loadAnimationOnDemand(animName)
+	-- Check if already loaded as a track
+	if animations[animName] then
+		return animations[animName]
 	end
 
-	return loadedAnimations[animName]
+	-- Check if we have the ID stored
+	local animId = animationIds[animName]
+	if not animId then
+		warn("[Client] No animation ID found for:", animName)
+		return nil
+	end
+
+	-- Load it now
+	local success, track = pcall(function()
+		return createAndLoadAnim(animId, Enum.AnimationPriority.Action)
+	end)
+
+	if success and track then
+		animations[animName] = track
+		print("[Client] Loaded animation on-demand:", animName)
+		return track
+	else
+		warn("[Client] Failed to load animation:", animName)
+		return nil
+	end
 end
 
 -- Default animation IDs for Killers
@@ -119,9 +133,12 @@ local function setupAnimations(animIds, charType)
 	characterType = charType
 	animIds = animIds or (characterType == "Survivor" and defaultSurvivorAnimIds or defaultKillerAnimIds)
 
-	-- ✅ Load ONLY core movement animations upfront
-	-- All other animations (Punch, Swing, etc.) are loaded on-demand
+	-- ✅ Store ALL animation IDs first
+	for name, id in pairs(animIds) do
+		animationIds[name] = id
+	end
 
+	-- ✅ Load ONLY core movement animations upfront
 	if characterType == "Survivor" then
 		-- Survivor core animations
 		animations.Idle = createAndLoadAnim(animIds.Idle)
@@ -162,14 +179,9 @@ local function setupAnimations(animIds, charType)
 		animations.InjuredWalk.KeyframeReached:Connect(footStep)
 	end
 
-	-- ✅ Store all animation IDs for on-demand loading
-	for name, id in pairs(animIds) do
-		if not animations[name] then -- Don't overwrite already loaded ones
-			loadedAnimations[name] = id -- Store the ID, not the track
-		end
-	end
-
 	animationsReady = true
+	print("[Client] Animation setup complete. Character type:", characterType)
+	print("[Client] Available animation IDs:", animationIds)
 end
 
 -- ===============================================
@@ -291,26 +303,22 @@ Remotes.SyncCharacterState.OnClientEvent:Connect(function(state)
 	barsGui.Stamina.Number.Text = math.floor(state.Stamina)
 end)
 
--- ✅ IMPROVED: Play animations (with on-demand loading)
+-- ✅ FIX: Play animations (with on-demand loading)
 Remotes.PlayAnimation.OnClientEvent:Connect(function(animName)
-	-- First check if it's already loaded in animations table
+	print("[Client] Play animation requested:", animName)
+	
+	-- First check if it's already loaded
 	if animations[animName] then
 		animations[animName]:Play()
+		print("[Client] Playing pre-loaded animation:", animName)
 		return
 	end
 
-	-- If not, check if we have the ID cached and load it on-demand
-	if loadedAnimations[animName] then
-		-- If it's a string (ID), load it now
-		if type(loadedAnimations[animName]) == "string" then
-			local track = loadAnimationOnDemand(animName, loadedAnimations[animName], Enum.AnimationPriority.Action)
-			if track then
-				track:Play()
-			end
-			-- If it's already a track, play it
-		elseif typeof(loadedAnimations[animName]) == "Instance" then
-			loadedAnimations[animName]:Play()
-		end
+	-- Try to load it on-demand
+	local track = loadAnimationOnDemand(animName)
+	if track then
+		track:Play()
+		print("[Client] Playing on-demand animation:", animName)
 	else
 		warn("[Client] Animation not found:", animName)
 	end
@@ -320,8 +328,6 @@ end)
 Remotes.StopAnimation.OnClientEvent:Connect(function(animName)
 	if animations[animName] then
 		animations[animName]:Stop()
-	elseif loadedAnimations[animName] and typeof(loadedAnimations[animName]) == "Instance" then
-		loadedAnimations[animName]:Stop()
 	end
 end)
 

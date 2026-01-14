@@ -259,17 +259,26 @@ function module.checkForLMS()
 			remotes.FindPlayers:FireClient(numOfKillers[i], numOfSurvivors, 5)
 		end
 
+		-- ✅ FIX: Stop terror sounds BEFORE playing LMS music
+		if remotes:FindFirstChild("StopTerrorSounds") then
+			-- Set attribute first
+			replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
+
+			-- Wait a frame
+			task.wait()
+
+			-- Fire to all clients
+			remotes.StopTerrorSounds:FireAllClients()
+			print("[DoubleTrouble] Stopped terror sounds for LMS")
+
+			-- Wait to ensure clients process it
+			task.wait(0.2)
+		end
+
 		-- Double Trouble always plays its special LMS music, regardless of character matchups
 		local lmsMusic = workspace.LMS:FindFirstChild("LMSDoubleTrouble")
 		if lmsMusic then
 			lmsMusic:Play()
-		end
-
-		-- Stop local terror radius sounds on all clients
-		if remotes:FindFirstChild("StopTerrorSounds") then
-			-- servidor
-			remotes.StopTerrorSounds:FireAllClients()
-			replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
 		end
 
 		-- Set timer to 44 seconds
