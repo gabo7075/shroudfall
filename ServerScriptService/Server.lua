@@ -256,19 +256,19 @@ remotes.StatusEffects.Slow.OnServerEvent:Connect(function(plr, targetChar, delta
 	targetChar:SetAttribute("IntendedWalkSpeed", math.max(0, current + delta))
 end)
 
-remotes.Strength.OnServerEvent:Connect(function(player, char, amount)
+remotes.StatusEffects.Strength.OnServerEvent:Connect(function(player, char, amount)
 	updateAttribute(char, "Strength", amount)
 end)
 
-remotes.Weakness.OnServerEvent:Connect(function(player, char, amount)
+remotes.StatusEffects.Weakness.OnServerEvent:Connect(function(player, char, amount)
 	updateAttribute(char, "Weakness", amount)
 end)
 
-remotes.Resistance.OnServerEvent:Connect(function(player, char, amount)
+remotes.StatusEffects.Resistance.OnServerEvent:Connect(function(player, char, amount)
 	updateAttribute(char, "Resistance", amount)
 end)
 
-remotes.Helpless.OnServerEvent:Connect(function(player, char, amount)
+remotes.StatusEffects.Helpless.OnServerEvent:Connect(function(player, char, amount)
 	updateAttribute(char, "Helpless", amount)
 end)
 
