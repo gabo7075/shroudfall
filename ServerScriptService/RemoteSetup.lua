@@ -28,6 +28,7 @@ local function createRemote(name, remoteType)
 
 	remote.Name = name
 	remote.Parent = Remotes
+	print("✓ Created remote:", name, "(" .. remoteType .. ")")
 	return remote
 end
 
@@ -35,6 +36,7 @@ end
 createRemote("CharacterInput", "Event")         -- Client → Server: Input handling
 createRemote("SyncCharacterState", "Event")     -- Server → Client: State sync
 createRemote("SetupAbilities", "Event")         -- Server → Client: Ability UI setup
+createRemote("SetupAnimations", "Event")        -- ✅ FIX: Added this line!
 createRemote("PlayAnimation", "Event")          -- Server → Client: Play animation
 createRemote("StopAnimation", "Event")          -- Server → Client: Stop animation
 createRemote("ActivateAbilityCooldown", "Event") -- Server → Client: Start cooldown UI
@@ -52,7 +54,7 @@ createRemote("DamageKnockback", "Event")
 createRemote("FindPlayers", "Event")
 createRemote("Connect", "Event")
 createRemote("ShowObj", "Event")
-createRemote("HighlightTargets")
+createRemote("HighlightTargets", "Event")
 createRemote("Delete", "Event")
 createRemote("StopTerrorSounds", "Event")
 
@@ -81,5 +83,9 @@ createStatusRemote("Infected")
 createStatusRemote("Undetectable")
 createStatusRemote("Speed")
 createStatusRemote("Slow")
+createStatusRemote("Strength")
+createStatusRemote("Weakness")
+createStatusRemote("Resistance")
+createStatusRemote("Helpless")
 
 print("✓ Remote events setup complete")

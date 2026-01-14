@@ -176,14 +176,16 @@ end
 -- REMOTE LISTENERS
 -- ===============================================
 
--- ✅ NEW: Receive animation IDs from server
-Remotes.SetupAnimations = Remotes:FindFirstChild("SetupAnimations") or Instance.new("RemoteEvent", Remotes)
-Remotes.SetupAnimations.Name = "SetupAnimations"
-
-Remotes.SetupAnimations.OnClientEvent:Connect(function(animIds, charType)
-	print("[Client] Received animation setup from server")
-	setupAnimations(animIds, charType)
-end)
+local setupAnimationsRemote = Remotes:WaitForChild("SetupAnimations", 10)
+if setupAnimationsRemote then
+	setupAnimationsRemote.OnClientEvent:Connect(function(animIds, charType)
+		print("[Client] Received animation setup from server")
+		setupAnimations(animIds, charType)
+	end)
+	print("[Client] Connected to SetupAnimations remote")
+else
+	warn("[Client] Failed to find SetupAnimations remote! Animations may not work correctly.")
+end
 
 -- Setup abilities from server
 Remotes.SetupAbilities.OnClientEvent:Connect(function(abilityData)
