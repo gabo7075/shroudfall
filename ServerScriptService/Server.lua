@@ -26,11 +26,6 @@ players.PlayerAdded:Connect(function(plr)
 	malice.Name = "Killer Chance"
 
 	plr.CharacterAdded:Connect(function(char)
-		-- Add neutral character script if no team
-		if plr.Team == nil then
-			packets.Neutral.CharacterScript:Clone().Parent = char
-		end
-
 		-- Handle death
 		char:FindFirstChildWhichIsA("Humanoid").Died:Connect(function()
 			if plr.Team == teams.Survivors then
@@ -334,9 +329,9 @@ remotes.DamageKnockback.OnServerEvent:Connect(function(plr, victim, direction, p
 	if victimPlayer then
 		hrp:SetNetworkOwner(nil)
 	end
-	
+
 	hrp.AssemblyAngularVelocity = Vector3.zero
-	
+
 	-- Create attachment and force
 	local attachment = Instance.new("Attachment", hrp)
 	local knockback = Instance.new("LinearVelocity")
