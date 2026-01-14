@@ -134,7 +134,7 @@ end
 
 function module.slow(length, amount, visible)
 	local clone = guiMod.createEffectClone("Slowness", length, amount)
-	local delta = 2.5 * amount
+	local delta = -2.5 * amount
 	remotes.StatusEffects.Slow:FireServer(char, delta)
 
 	if visible ~= nil then
