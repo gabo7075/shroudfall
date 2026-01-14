@@ -267,7 +267,9 @@ function module.checkForLMS()
 
 		-- Stop local terror radius sounds on all clients
 		if remotes:FindFirstChild("StopTerrorSounds") then
-			remotes.StopTerrorSounds:FireAllClients(true)
+			-- servidor
+			remotes.StopTerrorSounds:FireAllClients()
+			replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
 		end
 
 		-- Set timer to 44 seconds

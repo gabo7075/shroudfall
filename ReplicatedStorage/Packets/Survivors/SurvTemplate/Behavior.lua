@@ -1,10 +1,10 @@
--- ModuleScript: ReplicatedStorage > Packets > Survivors > [CharacterName] > Behavior
--- Server-side survivor behavior handler
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local Teams = game:GetService("Teams")
 local Remotes = ReplicatedStorage.Remotes
+local HitboxMod = require(ReplicatedStorage.HitBox)
 local RewardModule = require(ReplicatedStorage.RewardModule)
 
 local Behavior = {}
@@ -20,7 +20,11 @@ function Behavior.new(player, character, config)
 	self.Humanoid = character:FindFirstChildWhichIsA("Humanoid")
 	self.HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
 	self.Config = config
-	self.CharacterType = "Survivor" -- Mark as survivor
+	
+	local BehaviorRegistry = require(game.ServerScriptService.BehaviorRegistry)
+	BehaviorRegistry.register(self.Player, self)
+	
+	self.CharacterType = "Survivor"
 	-- State variables
 	self.Running = false
 	self.WantsToRun = false
@@ -28,12 +32,23 @@ function Behavior.new(player, character, config)
 	self.Stamina = config.Stamina or 100
 	self.CanUseAbilities = true
 	self.WalkingBackwards = false
+	self.Sounds = {}
+	if self.Config.Sounds then
+		for name, data in pairs(self.Config.Sounds) do
+			local sound = Instance.new("Sound")
+			sound.Name = name
+			sound.SoundId = data.Id or ""
+			sound.Volume = data.Volume or 1
+			sound.PlaybackSpeed = data.PlaybackSpeed or 1
+			sound.Parent = self.HumanoidRootPart
+			self.Sounds[name] = sound
+		end
+	end
 	-- Ability cooldowns
 	self.AbilityCooldowns = {
 		Ability1 = false,
 		Ability2 = false,
-		Ability3 = false,
-		Ability4 = false
+		Ability3 = false
 	}
 	-- Connections
 	self.Connections = {}
@@ -51,6 +66,17 @@ function Behavior.new(player, character, config)
 	self:SetupRemotes()
 	self:StartLoops()
 	self:SetupAbilities()
+	
+	if self.Character:GetAttribute("Resistance") == nil then
+		self.Character:SetAttribute("Resistance", 0)
+	end
+	if self.Character:GetAttribute("Weakness") == nil then
+		self.Character:SetAttribute("Weakness", 0)
+	end
+	if self.Character:GetAttribute("Helpless") == nil then
+		self.Character:SetAttribute("Helpless", 0)
+	end
+
 	return self
 end
 
@@ -71,8 +97,6 @@ function Behavior:SetupRemotes()
 			self:Ability2()
 		elseif inputType == "Ability3" then
 			self:Ability3()
-		elseif inputType == "Ability4" then
-			self:Ability4()
 		end
 	end))
 	-- Allow client to request abilities if they missed the initial send
@@ -142,64 +166,75 @@ end
 function Behavior:TakeDamage(damage, stunTime)
 	if not self.Humanoid or self.Humanoid.Health <= 0 then return end
 
-	-- ✅ FIX: Leer Atributos del Character (Servidor)
 	local weakness = self.Character:GetAttribute("Weakness") or 0
 	local resistance = self.Character:GetAttribute("Resistance") or 0
 
+	--[[print("------------------------------------------------")
+	print("[DAÑO] Golpe recibido por: " .. self.Player.Name)
+	print("[DAÑO] Atributo Weakness detectado: " .. tostring(weakness))
+	print("[DAÑO] Atributo Resistance detectado: " .. tostring(resistance))]]
+
 	-- Cálculo de Daño
+	local originalDamage = damage
+
+	-- Aplicar Debilidad
 	if weakness > 0 then
 		damage = math.round(damage * ((weakness / 5) + 1))
 	end
+
+	-- Aplicar Resistencia
 	if resistance > 0 then
 		damage = math.round(damage / ((resistance / 5) + 1))
 	end
 
+	--[[print("[DAÑO] Daño base: " .. originalDamage .. " -> Daño Final: " .. damage)
+	print("------------------------------------------------")]]
+
 	self.Humanoid.Health = math.max(0, self.Humanoid.Health - damage)
+
+	-- Los supervivientes no se stunean al recibir daño
 	return damage
+end
+
+function Behavior:CalculateDamageOutput(baseDamage)
+	local strength = self.Character:GetAttribute("Strength") or 0
+
+	if strength > 0 then
+		-- Aumenta daño un 20% por nivel (ajustable)
+		baseDamage = math.round(baseDamage * ((strength / 5) + 1))
+	end
+
+	return baseDamage
 end
 
 -- ===============================================
 -- ABILITIES
 -- ===============================================
 function Behavior:SetupAbilities()
-	local abilities = {}
-	-- Only setup abilities that exist in config
-	if self.Config.Ability1Name then
-		table.insert(abilities, {
-			Name = self.Config.Ability1Name,
-			Image = self.Config.Ability1Image or "rbxassetid://123352469952776",
-			Key = "Q",
-			Cooldown = self.Config.Ability1Cooldown or 10
-		})
-	end
-	if self.Config.Ability2Name then
-		table.insert(abilities, {
-			Name = self.Config.Ability2Name,
-			Image = self.Config.Ability2Image or "rbxassetid://82229308135638",
-			Key = "E",
-			Cooldown = self.Config.Ability2Cooldown or 15
-		})
-	end
-	if self.Config.Ability3Name then
-		table.insert(abilities, {
-			Name = self.Config.Ability3Name,
-			Image = self.Config.Ability3Image or "rbxassetid://106226036311010",
-			Key = "R",
-			Cooldown = self.Config.Ability3Cooldown or 20
-		})
-	end
-	if self.Config.Ability4Name then
-		table.insert(abilities, {
-			Name = self.Config.Ability4Name,
-			Image = self.Config.Ability4Image or "rbxassetid://77080976212074",
-			Key = "F",
-			Cooldown = self.Config.Ability4Cooldown or 25
-		})
-	end
 	-- Send ability info to client for UI (slight delay to ensure client listeners are ready)
-	warn("[Behavior:SetupAbilities] Firing SetupAbilities to", self.Player.Name)
+	local abilities = {
+		{
+			Name = self.Config.Ability1Name,
+			Image = self.Config.Ability1Image,
+			Key = "Q",
+			Cooldown = self.Config.Ability1Cooldown
+		},
+		{
+			Name = self.Config.Ability2Name,
+			Image = self.Config.Ability2Image,
+			Key = "E",
+			Cooldown = self.Config.Ability2Cooldown
+		},
+		{
+			Name = self.Config.Ability3Name,
+			Image = self.Config.Ability3Image,
+			Key = "R",
+			Cooldown = self.Config.Ability3Cooldown
+		}
+	}
+
 	task.spawn(function()
-		task.wait(0.5)
+		task.wait(0.3)
 		Remotes.SetupAbilities:FireClient(self.Player, abilities)
 	end)
 end
@@ -208,6 +243,10 @@ function Behavior:Ability1()
 	if not self:CanUseAbility("Ability1") then return end
 	self.CanUseAbilities = false
 	self.AbilityCooldowns.Ability1 = true
+	self.Humanoid:UnequipTools()
+	if self.Sounds.Speed then
+		self.Sounds.Speed:Play()
+	end
 	-- Speed boost (from your example)
 	Remotes.GiveEffect:FireClient(self.Player, "speed", 5, 1, true)
 	-- Give reward
@@ -229,8 +268,7 @@ function Behavior:Ability2()
 	self.CanUseAbilities = false
 	self.AbilityCooldowns.Ability2 = true
 	-- Resistance + Slow (from your example)
-	Remotes.GiveEffect:FireClient(self.Player, "resist", 1, 3, true)
-	Remotes.GiveEffect:FireClient(self.Player, "slow", 1, 2, true)
+	Remotes.GiveEffect:FireClient(self.Player, "resist", 5, 3, true)
 	-- Cooldown
 	task.spawn(function()
 		Remotes.ActivateAbilityCooldown:FireClient(self.Player, 
@@ -245,36 +283,165 @@ end
 
 function Behavior:Ability3()
 	if not self:CanUseAbility("Ability3") then return end
+
 	self.CanUseAbilities = false
 	self.AbilityCooldowns.Ability3 = true
-	-- Custom ability logic here
-	-- Cooldown
+
+	self.Humanoid:UnequipTools()
+	Remotes.PlayAnimation:FireClient(self.Player, "Punch")
+
+	task.delay(0.22, function()
+		local finalDamage = self:CalculateDamageOutput(self.Config.Ability3Damage or 30)
+		self:CreateMeleeHitbox(
+			finalDamage,  -- Now uses Strength-modified damage
+			self.Config.Ability3Knockback or 30,
+			nil,
+			function(victim)
+				local victimPlayer = Players:GetPlayerFromCharacter(victim)
+				if victimPlayer then
+					Remotes.GiveEffect:FireClient(victimPlayer, "bleed", 3, 1)
+				end
+			end,
+			Vector3.new(6.5,6.5,7),
+			CFrame.new(0,0,-2),
+			9,
+			0.125,
+			0.1,
+			"Hit",
+			3
+		)
+	end)
+
+	task.wait(1)
+
 	task.spawn(function()
 		Remotes.ActivateAbilityCooldown:FireClient(self.Player, 
 			self.Config.Ability3Name, 
-			self.Config.Ability3Cooldown or 20)
-		task.wait(self.Config.Ability3Cooldown or 20)
+			self.Config.Ability3Cooldown)
+		task.wait(self.Config.Ability3Cooldown)
 		self.AbilityCooldowns.Ability3 = false
 	end)
-	task.wait(1)
+
 	self.CanUseAbilities = true
 end
 
-function Behavior:Ability4()
-	if not self:CanUseAbility("Ability4") then return end
-	self.CanUseAbilities = false
-	self.AbilityCooldowns.Ability4 = true
-	-- Custom ability logic here
-	-- Cooldown
-	task.spawn(function()
-		Remotes.ActivateAbilityCooldown:FireClient(self.Player, 
-			self.Config.Ability4Name, 
-			self.Config.Ability4Cooldown or 25)
-		task.wait(self.Config.Ability4Cooldown or 25)
-		self.AbilityCooldowns.Ability4 = false
+-- ===============================================
+-- HITBOX HELPER (SURVIVOR)
+-- ===============================================
+
+function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback, hitboxSize, hitboxOffset, hitboxCount, hitboxDelay, hitboxDuration, hitSoundName, stunTime)
+	hitboxSize = hitboxSize or Vector3.new(4.3, 5.2, 5.2)
+	hitboxOffset = hitboxOffset or CFrame.new(0, 0, -1.5)
+	hitboxCount = hitboxCount or 7
+	hitboxDelay = hitboxDelay or 0.03
+	hitboxDuration = hitboxDuration or 0.125
+	hitSoundName = hitSoundName or "Hit"
+	stunTime = stunTime or 0 -- Default to no stun
+
+	local hitTable = {}
+
+	for i = 1, hitboxCount do
+		local hitbox = HitboxMod.create(self.HumanoidRootPart, hitboxSize, hitboxDuration, hitboxOffset)
+
+		hitbox.Touched:Connect(function(hit)
+			local victim = hit.Parent
+
+			if not victim:FindFirstChildWhichIsA("Humanoid") then return end
+			if table.find(hitTable, victim) then return end
+			if victim == self.Character then return end
+			if self:IsTeammate(victim) then return end
+
+			hitbox.BrickColor = BrickColor.new("Lime green")
+			table.insert(hitTable, victim)
+
+			local victimHum = victim:FindFirstChildWhichIsA("Humanoid")
+			local victimPlayer = Players:GetPlayerFromCharacter(victim)
+
+			local actualDamageDealt = damage
+
+			-- Apply damage through victim's behavior system
+			if victimPlayer then
+				local BehaviorRegistry = require(game.ServerScriptService.BehaviorRegistry)
+				local victimBehavior = BehaviorRegistry.get(victimPlayer)
+				if victimBehavior and type(victimBehavior.TakeDamage) == "function" then
+					-- Pass stunTime to victim's TakeDamage function
+					actualDamageDealt = victimBehavior:TakeDamage(damage, stunTime)
+				else
+					warn("[Hitbox] No behavior found for", victimPlayer.Name, "- applying direct damage")
+					victimHum.Health = math.max(0, victimHum.Health - damage)
+					actualDamageDealt = damage
+				end
+			else
+				-- Non-player victim (NPC)
+				victimHum.Health = math.max(0, victimHum.Health - damage)
+				actualDamageDealt = damage
+			end
+
+			-- Show hit indicator to attacker
+			Remotes.HitIndicator:FireClient(self.Player, victim.HumanoidRootPart.Position, actualDamageDealt)
+
+			-- Play hit sound
+			if hitSoundName and self.Sounds[hitSoundName] then
+				self.Sounds[hitSoundName]:Play()
+			end
+
+			-- Apply knockback
+			if knockback and knockback > 0 then
+				local direction = (victim.HumanoidRootPart.Position - self.HumanoidRootPart.Position).Unit
+				self:ApplyKnockback(victim, direction, knockback)
+			end
+
+			-- Give reward to attacker
+			if rewardType then
+				self:GiveReward(rewardType)
+			end
+
+			-- Execute custom callback
+			if onHitCallback then
+				onHitCallback(victim)
+			end
+		end)
+
+		task.wait(hitboxDelay)
+	end
+end
+
+function Behavior:ApplyKnockback(victim, direction, power)
+	local hrp = victim:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	-- Clean previous forces
+	for _, force in ipairs(hrp:GetChildren()) do
+		if force:IsA("LinearVelocity") or force:IsA("VectorForce") then
+			force:Destroy()
+		end
+	end
+
+	local victimPlayer = Players:GetPlayerFromCharacter(victim)
+	if victimPlayer then
+		hrp:SetNetworkOwner(nil)
+	end
+
+	hrp.AssemblyAngularVelocity = Vector3.zero
+
+	local attachment = Instance.new("Attachment", hrp)
+	local knockback = Instance.new("LinearVelocity")
+	knockback.Attachment0 = attachment
+	knockback.MaxForce = math.huge
+	local flatDir = Vector3.new(direction.X, 0, direction.Z).Unit
+	knockback.VectorVelocity = flatDir * power
+	knockback.Parent = hrp
+
+	task.delay(0.25, function()
+		if knockback then knockback:Destroy() end
+		if attachment then attachment:Destroy() end
+
+		if victimPlayer and hrp and hrp.Parent then
+			pcall(function()
+				hrp:SetNetworkOwner(victimPlayer)
+			end)
+		end
 	end)
-	task.wait(1)
-	self.CanUseAbilities = true
 end
 
 -- ===============================================
@@ -283,15 +450,32 @@ end
 function Behavior:CanUseAbility(abilityName)
 	-- ✅ FIX: Leer atributo Helpless
 	local helpless = self.Character:GetAttribute("Helpless") or 0
+	
+	local isRagdoll = self.Character:FindFirstChild("IsRagdoll")
+	local ragdolled = isRagdoll and isRagdoll.Value or false
 
 	return self.CanUseAbilities and 
 		self.Humanoid.Health > 0 and 
 		not self.AbilityCooldowns[abilityName] and 
 		helpless <= 0 and -- Verificación corregida
+		not ragdolled and
 		not self.Character:GetAttribute("ActiveTool")
 end
 
--- ✅ FIXED: Now handles rewards on SERVER SIDE for survivors
+function Behavior:IsTeammate(victim)
+	if not victim or not victim:FindFirstChildWhichIsA("Humanoid") then 
+		return false 
+	end
+
+	local victimPlayer = Players:GetPlayerFromCharacter(victim)
+
+	if victimPlayer and victimPlayer.Team == Teams.Survivors and self.Player.Team == Teams.Survivors then
+		return true
+	end
+
+	return false
+end
+
 function Behavior:GiveReward(rewardType)
 	if not self.Player or not self.Player.Parent then return end
 
@@ -459,6 +643,10 @@ end
 -- CLEANUP
 -- ===============================================
 function Behavior:Destroy()
+	local BehaviorRegistry = require(game.ServerScriptService.BehaviorRegistry)
+	BehaviorRegistry.unregister(self.Player)
+	-- luego tu cleanup normal
+
 	for _, connection in ipairs(self.Connections) do
 		connection:Disconnect()
 	end

@@ -76,19 +76,6 @@ remotes.FindPlayers.OnClientEvent:Connect(function(victims, length)
 	gameMod.findPlayers(victims, length)
 end)
 
--- Stop local TerrorSounds when server starts an LMS
-remotes:WaitForChild("StopTerrorSounds").OnClientEvent:Connect(function()
-	local folder = workspace:FindFirstChild("TerrorSounds")
-	if not folder then return end
-	for _, child in ipairs(folder:GetChildren()) do
-		if child and child:IsA("Sound") then
-			pcall(function() child:Stop() end)
-			pcall(function() child:Destroy() end)
-		end
-	end
-	pcall(function() folder:Destroy() end)
-end)
-
 remotes:WaitForChild("HighlightTargets").OnClientEvent:Connect(function(action, arg1, arg2, arg3)
 	if action == "FindPlayers" then
 		-- arg1: targets (table), arg2: length, arg3: color

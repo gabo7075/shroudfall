@@ -63,7 +63,7 @@ function module.loadAsCharacter(player, characterName, characterSkin, team)
 
 	-- 4. Get Config
 	local configData = getConfigData(charFolder:FindFirstChild("Config"))
-	
+
 	-- 5. Setup Humanoid with Config Health
 	local humanoid = player.Character:FindFirstChildWhichIsA("Humanoid")
 	if humanoid then
@@ -108,15 +108,15 @@ function module.loadAsCharacter(player, characterName, characterSkin, team)
 			activeBehaviors[player.UserId]:Destroy()
 			activeBehaviors[player.UserId] = nil
 		end
-		
+
 		-- Create new behavior instance
 		local success, behaviorClass = pcall(require, behaviorModule)
 		if success and behaviorClass and behaviorClass.new then
 			local behavior = behaviorClass.new(player, player.Character, configData)
 			activeBehaviors[player.UserId] = behavior
-			
+
 			print("✓ Initialized behavior for", player.Name, "as", characterName)
-			
+
 			-- Cleanup on death
 			humanoid.Died:Connect(function()
 				if activeBehaviors[player.UserId] then

@@ -1,12 +1,8 @@
--- ModuleScript: ReplicatedStorage > Packets > Killers > [CharacterName] > Behavior
--- Server-side character behavior handler
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Teams = game:GetService("Teams")
-
 local Remotes = ReplicatedStorage.Remotes
 local HitboxMod = require(ReplicatedStorage.HitBox)
 local RewardModule = require(ReplicatedStorage.RewardModule)
@@ -26,12 +22,16 @@ function Behavior.new(player, character, config)
 	self.Humanoid = character:FindFirstChildWhichIsA("Humanoid")
 	self.HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
 	self.Config = config
+	
+	local BehaviorRegistry = require(game.ServerScriptService.BehaviorRegistry)
+	BehaviorRegistry.register(self.Player, self)
 
+	self.CharacterType = "Killer"
 	-- State variables
 	self.Running = false
 	self.WantsToRun = false
 	self.CanGainStamina = true
-	self.Stamina = config.Stamina or 100
+	self.Stamina = config.Stamina or 110
 	self.CanUseAbilities = true
 	self.CanBeStunned = true
 	self.Stunned = false
@@ -79,6 +79,16 @@ function Behavior.new(player, character, config)
 	self:SetupRemotes()
 	self:StartLoops()
 	self:SetupAbilities()
+	
+	if self.Character:GetAttribute("Resistance") == nil then
+		self.Character:SetAttribute("Resistance", 0)
+	end
+	if self.Character:GetAttribute("Weakness") == nil then
+		self.Character:SetAttribute("Weakness", 0)
+	end
+	if self.Character:GetAttribute("Helpless") == nil then
+		self.Character:SetAttribute("Helpless", 0)
+	end
 
 	return self
 end
@@ -184,7 +194,6 @@ end
 function Behavior:TakeDamage(damage, stunTime)
 	if not self.Humanoid or self.Humanoid.Health <= 0 then return end
 
-	-- ✅ FIX: Leer Atributos
 	local weakness = self.Character:GetAttribute("Weakness") or 0
 	local resistance = self.Character:GetAttribute("Resistance") or 0
 
@@ -204,7 +213,6 @@ function Behavior:TakeDamage(damage, stunTime)
 end
 
 function Behavior:CalculateDamageOutput(baseDamage)
-	-- ✅ FIX: Leer atributo Strength directamente del Character
 	local strength = self.Character:GetAttribute("Strength") or 0
 
 	if strength > 0 then
@@ -243,7 +251,7 @@ end
 
 function Behavior:SetupAbilities()
 	-- Send ability info to client for UI (slight delay to ensure client listeners are ready)
-	local abilitiesPayload = {
+	local abilities = {
 		{
 			Name = self.Config.Ability1Name or "Punch",
 			Image = self.Config.Ability1Image or "rbxassetid://123352469952776",
@@ -270,10 +278,9 @@ function Behavior:SetupAbilities()
 		}
 	}
 
-	warn("[Behavior:SetupAbilities] Firing SetupAbilities to", self.Player.Name)
 	task.spawn(function()
-		task.wait(0.5)
-		Remotes.SetupAbilities:FireClient(self.Player, abilitiesPayload)
+		task.wait(0.3)
+		Remotes.SetupAbilities:FireClient(self.Player, abilities)
 	end)
 end
 
@@ -316,7 +323,7 @@ function Behavior:Ability1()
 			"SurvivorHit",
 			nil,
 			Vector3.new(4.3,5.2,5.2),
-			Vector3.new(0,0,-1.5),
+			CFrame.new(0,0,-1.5),
 			7,
 			0.03,
 			0.125,
@@ -383,7 +390,7 @@ function Behavior:Ability3()
 				LMSManager.highlightVictim(self.Player, victim, 3, Color3.fromRGB(0, 255, 0))
 			end,
 			Vector3.new(6.5,6.5,7),
-			Vector3.new(0,0,-2),
+			CFrame.new(0,0,-2),
 			10,
 			0.025,
 			0.2,
@@ -431,22 +438,17 @@ end
 
 function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback, hitboxSize, hitboxOffset, hitboxCount, hitboxDelay, hitboxDuration, hitSoundName)
 	hitboxSize = hitboxSize or Vector3.new(4.3, 5.2, 5.2)
-	hitboxOffset = hitboxOffset or Vector3.new(0, 0, -1.5)
+	hitboxOffset = hitboxOffset or CFrame.new(0, 0, -1.5) -- ✅ Changed to CFrame
 	hitboxCount = hitboxCount or 7
 	hitboxDelay = hitboxDelay or 0.03
 	hitboxDuration = hitboxDuration or 0.125
 	hitSoundName = hitSoundName or "Hit"
 
-	-- ✅ Create attachment that will continuously track character position
-	local attachment = Instance.new("Attachment")
-	attachment.Parent = self.HumanoidRootPart
-	attachment.Position = hitboxOffset
-
 	local hitTable = {}
 
 	for i = 1, hitboxCount do
-		-- ✅ Pass the attachment itself, not a static CFrame value
-		local hitbox = HitboxMod.create(attachment, hitboxSize, hitboxDuration)
+		-- ✅ DON'T create attachment - pass HumanoidRootPart directly with offset
+		local hitbox = HitboxMod.create(self.HumanoidRootPart, hitboxSize, hitboxDuration, hitboxOffset)
 
 		hitbox.Touched:Connect(function(hit)
 			local victim = hit.Parent
@@ -460,21 +462,26 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 			table.insert(hitTable, victim)
 
 			local victimHum = victim:FindFirstChildWhichIsA("Humanoid")
-			-- Get victim's behavior instance and call TakeDamage
 			local victimPlayer = Players:GetPlayerFromCharacter(victim)
+
+			local actualDamageDealt = damage
+
 			if victimPlayer then
-				local behaviorInstance = victimPlayer:FindFirstChild("BehaviorInstance")
-				if behaviorInstance and behaviorInstance.Value then
-					behaviorInstance.Value:TakeDamage(damage, 0)
+				local BehaviorRegistry = require(game.ServerScriptService.BehaviorRegistry)
+				local victimBehavior = BehaviorRegistry.get(victimPlayer)
+				if victimBehavior and type(victimBehavior.TakeDamage) == "function" then
+					actualDamageDealt = victimBehavior:TakeDamage(damage, 0)
 				else
-					-- Fallback if no behavior instance found
-					victimHum.Health = victimHum.Health - damage
+					warn("[Hitbox] No behavior found for", victimPlayer.Name, "- applying direct damage")
+					victimHum.Health = math.max(0, victimHum.Health - damage)
+					actualDamageDealt = damage
 				end
 			else
-				victimHum.Health = victimHum.Health - damage
+				victimHum.Health = math.max(0, victimHum.Health - damage)
+				actualDamageDealt = damage
 			end
 
-			Remotes.HitIndicator:FireClient(self.Player, victim.HumanoidRootPart.Position, damage)
+			Remotes.HitIndicator:FireClient(self.Player, victim.HumanoidRootPart.Position, actualDamageDealt)
 
 			if hitSoundName and self.Sounds[hitSoundName] then
 				self.Sounds[hitSoundName]:Play()
@@ -496,11 +503,6 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 
 		task.wait(hitboxDelay)
 	end
-
-	-- ✅ Destroy attachment after all hitboxes are done
-	task.delay(hitboxDuration + 0.1, function()
-		attachment:Destroy()
-	end)
 end
 
 function Behavior:ApplyKnockback(victim, direction, power)
@@ -549,10 +551,14 @@ function Behavior:CanUseAbility(abilityName)
 	-- ✅ FIX: Leer atributo Helpless
 	local helpless = self.Character:GetAttribute("Helpless") or 0
 
+	local isRagdoll = self.Character:FindFirstChild("IsRagdoll")
+	local ragdolled = isRagdoll and isRagdoll.Value or false
+
 	return self.CanUseAbilities and 
 		self.Humanoid.Health > 0 and 
 		not self.AbilityCooldowns[abilityName] and 
-		helpless <= 0 and -- Verificación corregida
+		helpless <= 0 and
+		not ragdolled and -- ✅ Prevent abilities while ragdolled
 		not self.Character:GetAttribute("ActiveTool") and 
 		not self.Stunned
 end
@@ -571,7 +577,6 @@ function Behavior:IsTeammate(victim)
 	return false
 end
 
--- ✅ FIXED: Now handles rewards on SERVER SIDE
 function Behavior:GiveReward(rewardType)
 	if not self.Player or not self.Player.Parent then return end
 
@@ -769,6 +774,10 @@ end
 -- ===============================================
 
 function Behavior:Destroy()
+	local BehaviorRegistry = require(game.ServerScriptService.BehaviorRegistry)
+	BehaviorRegistry.unregister(self.Player)
+	-- luego tu cleanup normal
+
 	for _, connection in ipairs(self.Connections) do
 		connection:Disconnect()
 	end

@@ -59,7 +59,9 @@ players.PlayerAdded:Connect(function(plr)
 							lmsMusic:Play()
 						end
 						if remotes:FindFirstChild("StopTerrorSounds") then
-							remotes.StopTerrorSounds:FireAllClients(true)
+							-- servidor
+							remotes.StopTerrorSounds:FireAllClients()
+							replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
 						end
 						timerManager.setTime(44)
 					else
@@ -71,7 +73,8 @@ players.PlayerAdded:Connect(function(plr)
 							lmsMusic:Play()
 						end
 						if remotes:FindFirstChild("StopTerrorSounds") then
-							remotes.StopTerrorSounds:FireAllClients(true)
+							remotes.StopTerrorSounds:FireAllClients()
+							replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
 						end
 						timerManager.setTime(newTime)
 					end
@@ -126,7 +129,8 @@ players.PlayerRemoving:Connect(function(plr)
 					lmsMusic:Play()
 				end
 				if remotes:FindFirstChild("StopTerrorSounds") then
-					remotes.StopTerrorSounds:FireAllClients(true)
+					remotes.StopTerrorSounds:FireAllClients()
+					replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
 				end
 			else
 				-- Standard LMS

@@ -128,13 +128,14 @@ local function getRigConfig(rig)
 	return config
 end
 
--- Create sounds from Config data
--- Asegurarnos que el Folder exista
+local TERROR_FOLDER_NAME = "TerrorSounds_" .. tostring(player.UserId)
+
+-- Reemplaza getOrCreateTerrorFolder por esto:
 local function getOrCreateTerrorFolder()
-	local folder = workspace:FindFirstChild("TerrorSounds")
+	local folder = workspace:FindFirstChild(TERROR_FOLDER_NAME)
 	if not folder then
 		folder = Instance.new("Folder")
-		folder.Name = "TerrorSounds"
+		folder.Name = TERROR_FOLDER_NAME
 		folder.Parent = workspace
 	end
 	return folder
@@ -272,9 +273,8 @@ local function ensureRigState(rig)
 	return state
 end
 
--- Limpieza de sonidos huérfanos (no reproducidos) en el folder
 local function cleanupUnusedSounds()
-	local folder = workspace:FindFirstChild("TerrorSounds")
+	local folder = workspace:FindFirstChild(TERROR_FOLDER_NAME)
 	if not folder then return end
 
 	for _, sound in ipairs(folder:GetChildren()) do
@@ -309,6 +309,33 @@ local ambientSound = nil
 local isAmbientFaded = false
 local lockedChaseRig = nil
 
+local function cleanTerrorSounds()
+	local folder = workspace:FindFirstChild(TERROR_FOLDER_NAME)
+	if folder then
+		for _, child in ipairs(folder:GetChildren()) do
+			if child:IsA("Sound") then
+				pcall(function()
+					child:Stop()
+					child:Destroy()
+				end)
+			end
+		end
+		pcall(function() folder:Destroy() end)
+	end
+
+	-- reset de estados
+	rigStateCache = {}
+	activeRigStates = {}
+	rigConfigCache = {}
+	lockedChaseRig = nil
+end
+
+-- Conectar el Remote (hazlo cerca del inicio del script)
+if Remotes and Remotes:FindFirstChild("StopTerrorSounds") then
+	-- si existe, conectamos directamente
+	Remotes.StopTerrorSounds.OnClientEvent:Connect(cleanTerrorSounds)
+end
+
 -- Llamado periódico para limpiar sonidos
 RunService.Heartbeat:Connect(function(dt)
 	accumulator = accumulator + dt
@@ -320,6 +347,9 @@ end)
 
 player.CharacterAdded:Connect(function()
 	wait(0.05)
+
+	cleanTerrorSounds() -- ✅ ahora sí, todo ya existe
+
 	lastRoot = getCharRoot()
 	activeRigStates = {}
 	lockedChaseRig = nil
