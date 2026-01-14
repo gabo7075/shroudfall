@@ -292,9 +292,13 @@ function module.regen(length, amount, visible)
 	regen = false
 end
 
+-- StatusEffectsModule.lua (Fragmentos a reemplazar)
+
 function module.strength(length, amount, visible)
 	local clone = guiMod.createEffectClone("Strength", length, amount)
-	plr.PlayerGui.GameGui.Stats.Strength.Value += amount
+
+	-- 🔥 FIX: Avisar al servidor
+	remotes.StatusEffects.Strength:FireServer(char, amount)
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -302,18 +306,16 @@ function module.strength(length, amount, visible)
 
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
-	plr.PlayerGui.GameGui.Stats.Strength.Value -= amount
-end
 
--- Also add a cancel function for Strength (with the other cancel functions)
-function module.cancelStrength()
-	destroyEffectClone("Strength")
-	plr.PlayerGui.GameGui.Stats.Strength.Value = 0
+	-- 🔥 FIX: Retirar efecto en servidor
+	remotes.StatusEffects.Strength:FireServer(char, -amount)
 end
 
 function module.weak(length, amount, visible)
 	local clone = guiMod.createEffectClone("Weakness", length, amount)
-	plr.PlayerGui.GameGui.Stats.Weakness.Value += amount
+
+	-- 🔥 FIX: Avisar al servidor
+	remotes.StatusEffects.Weakness:FireServer(char, amount)
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -321,12 +323,15 @@ function module.weak(length, amount, visible)
 
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
-	plr.PlayerGui.GameGui.Stats.Weakness.Value -= amount
+
+	remotes.StatusEffects.Weakness:FireServer(char, -amount)
 end
 
 function module.resist(length, amount, visible)
 	local clone = guiMod.createEffectClone("Resistance", length, amount)
-	plr.PlayerGui.GameGui.Stats.Resistance.Value += amount
+
+	-- 🔥 FIX: Avisar al servidor
+	remotes.StatusEffects.Resistance:FireServer(char, amount)
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -334,12 +339,15 @@ function module.resist(length, amount, visible)
 
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
-	plr.PlayerGui.GameGui.Stats.Resistance.Value -= amount
+
+	remotes.StatusEffects.Resistance:FireServer(char, -amount)
 end
 
 function module.helpless(length, amount, visible)
 	local clone = guiMod.createEffectClone("Helpless", length, amount)
-	plr.PlayerGui.GameGui.Stats.Helpless.Value += amount
+
+	-- 🔥 FIX: Avisar al servidor
+	remotes.StatusEffects.Helpless:FireServer(char, amount)
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -347,7 +355,8 @@ function module.helpless(length, amount, visible)
 
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
-	plr.PlayerGui.GameGui.Stats.Helpless.Value -= amount
+
+	remotes.StatusEffects.Helpless:FireServer(char, -amount)
 end
 
 function module.blindness(length, amount, visible)
