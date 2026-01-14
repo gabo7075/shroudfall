@@ -384,27 +384,6 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 				actualDamageDealt = damage
 			end
 
-			-- APLICAR STUN (inmediato)
-			if stunTime and stunTime > 0 then
-				-- Si la behavior tiene Stun, usarla (no bloquear)
-				if victimBehavior and type(victimBehavior.Stun) == "function" then
-					task.spawn(function()
-						-- No pasamos por waits en el servidor principal; la behavior maneja anims/flags internamente
-						pcall(function() victimBehavior:Stun(stunTime) end)
-					end)
-				else
-					-- Fallback: usar atributo Helpless
-					if victim and victim.Parent then
-						victim:SetAttribute("Helpless", stunTime)
-						task.delay(stunTime, function()
-							if victim and victim.Parent then
-								pcall(function() victim:SetAttribute("Helpless", 0) end)
-							end
-						end)
-					end
-				end
-			end
-
 			-- HIT INDICATOR (inmediato)
 			Remotes.HitIndicator:FireClient(self.Player, victim.HumanoidRootPart.Position, actualDamageDealt)
 
@@ -426,6 +405,27 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 
 			if onHitCallback then
 				onHitCallback(victim)
+			end
+			
+			-- APLICAR STUN (inmediato)
+			if stunTime and stunTime > 0 then
+				-- Si la behavior tiene Stun, usarla (no bloquear)
+				if victimBehavior and type(victimBehavior.Stun) == "function" then
+					task.spawn(function()
+						-- No pasamos por waits en el servidor principal; la behavior maneja anims/flags internamente
+						pcall(function() victimBehavior:Stun(stunTime) end)
+					end)
+				else
+					-- Fallback: usar atributo Helpless
+					if victim and victim.Parent then
+						victim:SetAttribute("Helpless", stunTime)
+						task.delay(stunTime, function()
+							if victim and victim.Parent then
+								pcall(function() victim:SetAttribute("Helpless", 0) end)
+							end
+						end)
+					end
+				end
 			end
 		end)
 
