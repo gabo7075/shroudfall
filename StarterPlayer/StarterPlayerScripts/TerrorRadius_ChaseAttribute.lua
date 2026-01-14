@@ -6,7 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 
-local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 -- CONFIG GLOBAL (valores por defecto si el Config no existe)
 local DEFAULT_OUTER_RADIUS = 60
@@ -130,7 +130,6 @@ end
 
 local TERROR_FOLDER_NAME = "TerrorSounds_" .. tostring(player.UserId)
 
--- Reemplaza getOrCreateTerrorFolder por esto:
 local function getOrCreateTerrorFolder()
 	local folder = workspace:FindFirstChild(TERROR_FOLDER_NAME)
 	if not folder then
@@ -154,7 +153,6 @@ local function createSoundsFromConfig(rig, terrorSoundsConfig)
 
 	for i, soundData in ipairs(terrorSoundsConfig) do
 		local sound = Instance.new("Sound")
-		-- 🎯 Aquí agregamos el prefijo
 		sound.Name = killerName .. "_" .. (soundData.Name or ("Layer" .. i))
 		sound.SoundId = soundData.Id or ""
 		sound.Volume = 0
@@ -284,7 +282,6 @@ local function cleanupUnusedSounds()
 	end
 end
 
--- Además, cuando limpies rigState, destruimos los sonidos específicos
 local function cleanupRigState(rig)
 	local state = rigStateCache[rig]
 	if state and state.sounds then
@@ -309,7 +306,10 @@ local ambientSound = nil
 local isAmbientFaded = false
 local lockedChaseRig = nil
 
+-- ✅ FIX: Enhanced cleanup function
 local function cleanTerrorSounds()
+	print("[TerrorRadius] Cleaning all terror sounds...")
+	
 	local folder = workspace:FindFirstChild(TERROR_FOLDER_NAME)
 	if folder then
 		for _, child in ipairs(folder:GetChildren()) do
@@ -323,18 +323,37 @@ local function cleanTerrorSounds()
 		pcall(function() folder:Destroy() end)
 	end
 
-	-- reset de estados
+	-- Reset all states
 	rigStateCache = {}
 	activeRigStates = {}
 	rigConfigCache = {}
 	lockedChaseRig = nil
+	
+	print("[TerrorRadius] Cleanup complete")
 end
 
--- Conectar el Remote (hazlo cerca del inicio del script)
-if Remotes and Remotes:FindFirstChild("StopTerrorSounds") then
-	-- si existe, conectamos directamente
-	Remotes.StopTerrorSounds.OnClientEvent:Connect(cleanTerrorSounds)
+-- ✅ FIX: Connect to StopTerrorSounds remote with WaitForChild
+local stopTerrorRemote = Remotes:WaitForChild("StopTerrorSounds", 10)
+if stopTerrorRemote then
+	stopTerrorRemote.OnClientEvent:Connect(cleanTerrorSounds)
+	print("[TerrorRadius] Connected to StopTerrorSounds remote")
+else
+	warn("[TerrorRadius] Failed to find StopTerrorSounds remote!")
 end
+
+-- ✅ FIX: Also check for attribute-based flag (backup method)
+local lastStopFlag = 0
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		local currentFlag = ReplicatedStorage:GetAttribute("StopTerrorSoundsFlag")
+		if currentFlag and currentFlag ~= lastStopFlag then
+			lastStopFlag = currentFlag
+			cleanTerrorSounds()
+			print("[TerrorRadius] Detected StopTerrorSoundsFlag attribute change")
+		end
+	end
+end)
 
 -- Llamado periódico para limpiar sonidos
 RunService.Heartbeat:Connect(function(dt)
@@ -348,7 +367,7 @@ end)
 player.CharacterAdded:Connect(function()
 	wait(0.05)
 
-	cleanTerrorSounds() -- ✅ ahora sí, todo ya existe
+	cleanTerrorSounds()
 
 	lastRoot = getCharRoot()
 	activeRigStates = {}
@@ -416,16 +435,13 @@ RunService.Heartbeat:Connect(function(dt)
 			if st then
 				local isSelf = (rig == player.Character)
 
-				-- 🚫 UNDETECTABLE LOGIC FOR SURVIVORS:
 				if not isSelf then
 					local rigPlayer = Players:GetPlayerFromCharacter(rig)
 
-					-- Skip teammate killers
 					if rigPlayer and rigPlayer.Team == Teams.Killers and player.Team == Teams.Killers then
 						continue
 					end
 
-					-- Skip Undetectable killer rigs
 					if getRigUndetectable(rig) then
 						if activeRigStates[rig] then
 							for _, s in ipairs(st.sounds) do
@@ -443,7 +459,6 @@ RunService.Heartbeat:Connect(function(dt)
 
 				local nearestDist = (pos - charRoot.Position).Magnitude
 
-				-- 🎯 UNDETECTABLE LOGIC FOR KILLERS:
 				if isSelf then
 					local closestDist = math.huge
 					local hasDetectableSurvivor = false
