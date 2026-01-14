@@ -139,35 +139,7 @@ players.PlayerRemoving:Connect(function(plr)
 	end
 end)
 
--- Damage handling
-remotes.Damage.OnServerEvent:Connect(function(plr, killer, checking, victim, damage, stunTime, source)
-	if checking then
-		if players:GetPlayerFromCharacter(victim) then
-			remotes.Damage:FireClient(players:GetPlayerFromCharacter(victim), killer, damage, stunTime, source)
-		else
-			-- Check if NPC is immune to attacker's team
-			local immuneTeam = victim:GetAttribute("ImmuneToTeam")
-			if immuneTeam and plr.Team and plr.Team.Name == immuneTeam then
-				return
-			end
-			victim:FindFirstChildWhichIsA("Humanoid").Health -= damage
-			remotes.HitIndicator:FireClient(killer, victim.HumanoidRootPart.Position, damage)
-		end
-	else
-		if victim then
-			remotes.Connect:FireClient(killer, victim, source)
-			if victim:FindFirstChildWhichIsA("Humanoid").Health > 0 then
-				remotes.HitIndicator:FireClient(killer, victim.HumanoidRootPart.Position, damage)
-			end
-			victim:FindFirstChildWhichIsA("Humanoid").Health -= damage
-		else
-			remotes.Connect:FireClient(killer, plr.Character, source)
-			plr.Character:FindFirstChildWhichIsA("Humanoid").Health -= damage
-		end
-	end
-end)
-
--- Heal handling
+-- Heal handling for items
 remotes.Heal.OnServerEvent:Connect(function(plr, amount)
 	local char = plr.Character
 	if not char then return end

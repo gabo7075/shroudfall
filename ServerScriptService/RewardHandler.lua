@@ -139,11 +139,3 @@ remotes.GiveReward.OnServerEvent:Connect(function(player, messageOrType, money, 
 	-- Show popup
 	rewardRemote:FireClient(player, messageOrType, money, malice)
 end)
-
--- Track damage to attribute kills properly
-remotes.Damage.OnServerEvent:Connect(function(plr, killer, checking, victim, damage, stunTime, source)
-	-- Store the attacker for this victim
-	if victim and killer then
-		lastAttacker[victim] = plr
-	end
-end)
