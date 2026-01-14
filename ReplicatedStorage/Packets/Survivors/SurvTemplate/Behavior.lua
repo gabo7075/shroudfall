@@ -141,20 +141,22 @@ end
 -- ===============================================
 function Behavior:TakeDamage(damage, stunTime)
 	if not self.Humanoid or self.Humanoid.Health <= 0 then return end
-	-- Apply weakness/resistance
-	local weakness = self.Player.PlayerGui.GameGui.Stats.Weakness.Value
-	local resistance = self.Player.PlayerGui.GameGui.Stats.Resistance.Value
+
+	-- ✅ FIX: Leer Atributos del Character (Servidor)
+	local weakness = self.Character:GetAttribute("Weakness") or 0
+	local resistance = self.Character:GetAttribute("Resistance") or 0
+
+	-- Cálculo de Daño
 	if weakness > 0 then
 		damage = math.round(damage * ((weakness / 5) + 1))
 	end
 	if resistance > 0 then
 		damage = math.round(damage / ((resistance / 5) + 1))
 	end
+
 	self.Humanoid.Health = math.max(0, self.Humanoid.Health - damage)
-	-- Survivors don't get stunned (unlike killers)
 	return damage
 end
-
 
 -- ===============================================
 -- ABILITIES
@@ -279,10 +281,13 @@ end
 -- HELPERS
 -- ===============================================
 function Behavior:CanUseAbility(abilityName)
+	-- ✅ FIX: Leer atributo Helpless
+	local helpless = self.Character:GetAttribute("Helpless") or 0
+
 	return self.CanUseAbilities and 
 		self.Humanoid.Health > 0 and 
 		not self.AbilityCooldowns[abilityName] and 
-		self.Player.PlayerGui.GameGui.Stats.Helpless.Value <= 0 and 
+		helpless <= 0 and -- Verificación corregida
 		not self.Character:GetAttribute("ActiveTool")
 end
 

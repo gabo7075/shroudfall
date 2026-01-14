@@ -184,9 +184,9 @@ end
 function Behavior:TakeDamage(damage, stunTime)
 	if not self.Humanoid or self.Humanoid.Health <= 0 then return end
 
-	-- Apply weakness/resistance
-	local weakness = self.Player.PlayerGui.GameGui.Stats.Weakness.Value
-	local resistance = self.Player.PlayerGui.GameGui.Stats.Resistance.Value
+	-- ✅ FIX: Leer Atributos
+	local weakness = self.Character:GetAttribute("Weakness") or 0
+	local resistance = self.Character:GetAttribute("Resistance") or 0
 
 	if weakness > 0 then
 		damage = math.round(damage * ((weakness / 5) + 1))
@@ -200,17 +200,15 @@ function Behavior:TakeDamage(damage, stunTime)
 	if stunTime and self.CanBeStunned then
 		self:Stun(stunTime)
 	end
-
 	return damage
 end
 
 function Behavior:CalculateDamageOutput(baseDamage)
-	if not self.Player or not self.Player.PlayerGui then return baseDamage end
-
-	local strength = self.Player.PlayerGui.GameGui.Stats.Strength.Value
+	-- ✅ FIX: Leer atributo Strength directamente del Character
+	local strength = self.Character:GetAttribute("Strength") or 0
 
 	if strength > 0 then
-		-- Increase damage by 20% per strength level (adjust multiplier as needed)
+		-- Aumenta daño un 20% por nivel (ajustable)
 		baseDamage = math.round(baseDamage * ((strength / 5) + 1))
 	end
 
@@ -548,10 +546,13 @@ end
 -- ===============================================
 
 function Behavior:CanUseAbility(abilityName)
+	-- ✅ FIX: Leer atributo Helpless
+	local helpless = self.Character:GetAttribute("Helpless") or 0
+
 	return self.CanUseAbilities and 
 		self.Humanoid.Health > 0 and 
 		not self.AbilityCooldowns[abilityName] and 
-		self.Player.PlayerGui.GameGui.Stats.Helpless.Value <= 0 and 
+		helpless <= 0 and -- Verificación corregida
 		not self.Character:GetAttribute("ActiveTool") and 
 		not self.Stunned
 end

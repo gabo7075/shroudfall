@@ -11,6 +11,13 @@ local gameMod = require(replicatedStorage.GameModule)
 local lmsManager = require(replicatedStorage.Modules.LMSManager)
 local timerManager = require(replicatedStorage.Modules.TimerManager)
 
+local function updateAttribute(char, attrName, amount)
+	if char then
+		local current = char:GetAttribute(attrName) or 0
+		char:SetAttribute(attrName, math.max(0, current + amount))
+	end
+end
+
 starterPlayer.CameraMaxZoomDistance = 30
 starterPlayer.EnableMouseLockOption = false
 
@@ -247,6 +254,22 @@ remotes.StatusEffects.Slow.OnServerEvent:Connect(function(plr, targetChar, delta
 	local delta = tonumber(deltaAmount) or 0
 	local current = targetChar:GetAttribute("IntendedWalkSpeed") or 16
 	targetChar:SetAttribute("IntendedWalkSpeed", math.max(0, current + delta))
+end)
+
+remotes.Strength.OnServerEvent:Connect(function(player, char, amount)
+	updateAttribute(char, "Strength", amount)
+end)
+
+remotes.Weakness.OnServerEvent:Connect(function(player, char, amount)
+	updateAttribute(char, "Weakness", amount)
+end)
+
+remotes.Resistance.OnServerEvent:Connect(function(player, char, amount)
+	updateAttribute(char, "Resistance", amount)
+end)
+
+remotes.Helpless.OnServerEvent:Connect(function(player, char, amount)
+	updateAttribute(char, "Helpless", amount)
 end)
 
 remotes.Delete.OnServerEvent:Connect(function(plr, obj)
