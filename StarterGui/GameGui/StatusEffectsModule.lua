@@ -292,6 +292,25 @@ function module.regen(length, amount, visible)
 	regen = false
 end
 
+function module.strength(length, amount, visible)
+	local clone = guiMod.createEffectClone("Strength", length, amount)
+	plr.PlayerGui.GameGui.Stats.Strength.Value += amount
+
+	if visible ~= nil then
+		clone.Visible = visible
+	end
+
+	guiMod.countDown(clone.Number, length)
+	clone:Destroy()
+	plr.PlayerGui.GameGui.Stats.Strength.Value -= amount
+end
+
+-- Also add a cancel function for Strength (with the other cancel functions)
+function module.cancelStrength()
+	destroyEffectClone("Strength")
+	plr.PlayerGui.GameGui.Stats.Strength.Value = 0
+end
+
 function module.weak(length, amount, visible)
 	local clone = guiMod.createEffectClone("Weakness", length, amount)
 	plr.PlayerGui.GameGui.Stats.Weakness.Value += amount

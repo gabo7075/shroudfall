@@ -204,6 +204,19 @@ function Behavior:TakeDamage(damage, stunTime)
 	return damage
 end
 
+function Behavior:CalculateDamageOutput(baseDamage)
+	if not self.Player or not self.Player.PlayerGui then return baseDamage end
+
+	local strength = self.Player.PlayerGui.GameGui.Stats.Strength.Value
+
+	if strength > 0 then
+		-- Increase damage by 20% per strength level (adjust multiplier as needed)
+		baseDamage = math.round(baseDamage * ((strength / 5) + 1))
+	end
+
+	return baseDamage
+end
+
 function Behavior:Stun(duration)
 	if self.Stunned or not self.CanBeStunned then return end
 
@@ -274,7 +287,7 @@ function Behavior:Ability1()
 
 	-- Unequip tools
 	self.Humanoid:UnequipTools()
-	
+
 	local attackCFrame = self.HumanoidRootPart.CFrame
 
 	-- Play animation
@@ -296,10 +309,11 @@ function Behavior:Ability1()
 		end
 	end)
 
-	-- Hitbox
+	-- Hitbox (with Strength modifier applied)
 	task.delay(0.22, function()
+		local finalDamage = self:CalculateDamageOutput(self.Config.Ability1Damage or 25)
 		self:CreateMeleeHitbox(
-			self.Config.Ability1Damage or 25,
+			finalDamage,  -- Now uses Strength-modified damage
 			self.Config.Ability1Knockback or 15,
 			"SurvivorHit",
 			nil,
@@ -325,6 +339,7 @@ function Behavior:Ability2()
 
 	-- Apply speed boost
 	Remotes.GiveEffect:FireClient(self.Player, "speed", 5, 2, true)
+	Remotes.GiveEffect:FireClient(self.Player, "strength", 5, 1, true)
 
 	-- Cooldown
 	task.spawn(function()
@@ -355,8 +370,9 @@ function Behavior:Ability3()
 	end)
 
 	task.delay(0.22, function()
+		local finalDamage = self:CalculateDamageOutput(self.Config.Ability3Damage or 30)
 		self:CreateMeleeHitbox(
-			self.Config.Ability3Damage or 30,
+			finalDamage,  -- Now uses Strength-modified damage
 			self.Config.Ability3Knockback or 30,
 			"Ability3Hit",
 			function(victim)
@@ -364,7 +380,7 @@ function Behavior:Ability3()
 				if victimPlayer then
 					Remotes.GiveEffect:FireClient(victimPlayer, "slow", 3, 1)
 				end
-				
+
 				local LMSManager = require(ReplicatedStorage.Modules.LMSManager)
 				LMSManager.highlightVictim(self.Player, victim, 3, Color3.fromRGB(0, 255, 0))
 			end,
@@ -396,9 +412,8 @@ function Behavior:Ability4()
 	self.CanUseAbilities = false
 	self.AbilityCooldowns.Ability4 = true
 
-	-- Locate survivors
-	local gameMod = require(ReplicatedStorage.GameModule)
-	gameMod.findPlayers(Teams.Survivors:GetPlayers(), 3)
+	local LMSManager = require(ReplicatedStorage.Modules.LMSManager)
+	LMSManager.findPlayers(self.Player, Teams.Survivors:GetPlayers(), 3)
 
 	task.spawn(function()
 		Remotes.ActivateAbilityCooldown:FireClient(self.Player, 
@@ -447,7 +462,19 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 			table.insert(hitTable, victim)
 
 			local victimHum = victim:FindFirstChildWhichIsA("Humanoid")
-			victimHum.Health = victimHum.Health - damage
+			-- Get victim's behavior instance and call TakeDamage
+			local victimPlayer = Players:GetPlayerFromCharacter(victim)
+			if victimPlayer then
+				local behaviorInstance = victimPlayer:FindFirstChild("BehaviorInstance")
+				if behaviorInstance and behaviorInstance.Value then
+					behaviorInstance.Value:TakeDamage(damage, 0)
+				else
+					-- Fallback if no behavior instance found
+					victimHum.Health = victimHum.Health - damage
+				end
+			else
+				victimHum.Health = victimHum.Health - damage
+			end
 
 			Remotes.HitIndicator:FireClient(self.Player, victim.HumanoidRootPart.Position, damage)
 

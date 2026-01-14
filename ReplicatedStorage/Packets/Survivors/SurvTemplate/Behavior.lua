@@ -155,6 +155,7 @@ function Behavior:TakeDamage(damage, stunTime)
 	return damage
 end
 
+
 -- ===============================================
 -- ABILITIES
 -- ===============================================
@@ -288,7 +289,7 @@ end
 -- ✅ FIXED: Now handles rewards on SERVER SIDE for survivors
 function Behavior:GiveReward(rewardType)
 	if not self.Player or not self.Player.Parent then return end
-	
+
 	local customRewards = self.Config.CustomRewards or {}
 	local customReward = customRewards[rewardType]
 
