@@ -306,7 +306,7 @@ end)
 -- ✅ FIX: Play animations (with on-demand loading)
 Remotes.PlayAnimation.OnClientEvent:Connect(function(animName)
 	print("[Client] Play animation requested:", animName)
-	
+
 	-- First check if it's already loaded
 	if animations[animName] then
 		animations[animName]:Play()

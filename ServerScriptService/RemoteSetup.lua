@@ -56,7 +56,6 @@ createRemote("Connect", "Event")
 createRemote("ShowObj", "Event")
 createRemote("HighlightTargets", "Event")
 createRemote("Delete", "Event")
-createRemote("StopTerrorSounds", "Event")
 
 -- Status effect remotes
 local statusEffects = Remotes:FindFirstChild("StatusEffects")

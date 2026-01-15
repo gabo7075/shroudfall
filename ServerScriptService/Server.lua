@@ -18,7 +18,34 @@ local function updateAttribute(char, attrName, amount)
 	end
 end
 
-local function stopTerrorSoundsReliable()
+-- ✅ NEW: Helper function to destroy terror sounds from a character
+local function destroyTerrorSounds(character)
+	if not character then return end
+
+	local terrorSounds = character:FindFirstChild("TerrorSounds")
+	if terrorSounds then
+		terrorSounds:Destroy()
+		print("[Server] Destroyed terror sounds from", character.Name)
+		return true
+	end
+	return false
+end
+
+-- ✅ NEW: Stop terror sounds reliably (server + client signal)
+local function stopTerrorSoundsReliable(killerPlayer)
+	-- If specific killer provided, destroy their sounds
+	if killerPlayer and killerPlayer.Character then
+		destroyTerrorSounds(killerPlayer.Character)
+	else
+		-- Otherwise destroy all killer terror sounds
+		local killers = teams.Killers:GetPlayers()
+		for _, killer in ipairs(killers) do
+			if killer.Character then
+				destroyTerrorSounds(killer.Character)
+			end
+		end
+	end
+
 	-- Set attribute first
 	replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
 
@@ -71,21 +98,28 @@ players.PlayerAdded:Connect(function(plr)
 					-- Check if it's Double Trouble (2+ killers) or Standard (1 killer)
 					if #numOfKillers >= 2 then
 						-- Double Trouble LMS
+						-- ✅ Destroy all killer terror sounds
+						stopTerrorSoundsReliable()
+
 						local lmsMusic = workspace.LMS:FindFirstChild("LMSDoubleTrouble")
 						if lmsMusic then
 							lmsMusic:Play()
 						end
-						stopTerrorSoundsReliable()
+
 						timerManager.setTime(44)
 					else
 						-- Standard LMS with 1 killer
 						local killer = numOfKillers[1]
+
+						-- ✅ Destroy the single killer's terror sounds
+						stopTerrorSoundsReliable(killer)
+
 						local musicName, newTime = lmsManager.checkLMSConditions(killer, survivor)
 						local lmsMusic = workspace.LMS:FindFirstChild(musicName)
 						if lmsMusic then
 							lmsMusic:Play()
 						end
-						stopTerrorSoundsReliable()
+
 						timerManager.setTime(newTime)
 					end
 
@@ -102,6 +136,10 @@ players.PlayerAdded:Connect(function(plr)
 
 			elseif plr.Team == teams.Killers then
 				plr.Team = nil
+
+				-- ✅ Clean up terror sounds when killer dies
+				destroyTerrorSounds(char)
+
 				local numOfKillers = teams.Killers:GetPlayers()
 				if #numOfKillers == 0 then
 					gameMod.setTime(0)
@@ -114,6 +152,11 @@ players.PlayerAdded:Connect(function(plr)
 end)
 
 players.PlayerRemoving:Connect(function(plr)
+	-- ✅ Clean up terror sounds when player leaves
+	if plr.Team == teams.Killers and plr.Character then
+		destroyTerrorSounds(plr.Character)
+	end
+
 	local numOfSurvivors = teams.Survivors:GetPlayers()
 	local numOfKillers = teams.Killers:GetPlayers()
 	local totalPlayers = (#numOfSurvivors + #numOfKillers)
@@ -133,14 +176,21 @@ players.PlayerRemoving:Connect(function(plr)
 			-- Check if Double Trouble or Standard
 			if #numOfKillers >= 2 then
 				-- Double Trouble LMS
+				-- ✅ Destroy all killer terror sounds
+				stopTerrorSoundsReliable()
+
 				gameMod.setTime(44)
 				local lmsMusic = workspace.LMS:FindFirstChild("LMSDoubleTrouble")
 				if lmsMusic then
 					lmsMusic:Play()
 				end
-				stopTerrorSoundsReliable()
 			else
 				-- Standard LMS
+				local killer = numOfKillers[1]
+
+				-- ✅ Destroy the single killer's terror sounds
+				stopTerrorSoundsReliable(killer)
+
 				gameMod.setTime(75)
 			end
 

@@ -5,17 +5,15 @@ local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
-
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
--- CONFIG GLOBAL (valores por defecto si el Config no existe)
+-- CONFIG (defaults if Config not found)
 local DEFAULT_OUTER_RADIUS = 60
 local DEFAULT_L1_MIN = 45
 local DEFAULT_L2_MIN = 30
 local DEFAULT_L3_MIN = 6
 local UPDATE_INTERVAL = 0.12
 local CROSSFADE_TIME = 0.5
-local MAX_VOLUME = 0.6
 
 -- Cache for rig -> config mapping
 local rigConfigCache = {}
@@ -28,7 +26,7 @@ local function getCharRoot()
 	return nil
 end
 
--- Find terror rigs (busca por attribute "TerrorRig" = true)
+-- Find terror rigs (searches for attribute "TerrorRig" = true)
 local function findTerrorRigs()
 	local rigs = {}
 	for _, v in ipairs(workspace:GetChildren()) do
@@ -60,12 +58,10 @@ end
 -- Get killer name from rig using attribute
 local function getKillerNameFromRig(rig)
 	if not rig then return nil end
-
 	local killerName = nil
 	pcall(function()
 		killerName = rig:GetAttribute("CharacterName")
 	end)
-
 	return killerName
 end
 
@@ -128,64 +124,39 @@ local function getRigConfig(rig)
 	return config
 end
 
-local TERROR_FOLDER_NAME = "TerrorSounds_" .. tostring(player.UserId)
+-- ✅ NEW: Get terror sounds from server-sided character model
+local function getTerrorSoundsFromRig(rig)
+	if not rig then return nil end
 
-local function getOrCreateTerrorFolder()
-	local folder = workspace:FindFirstChild(TERROR_FOLDER_NAME)
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = TERROR_FOLDER_NAME
-		folder.Parent = workspace
+	local terrorFolder = rig:FindFirstChild("TerrorSounds")
+	if not terrorFolder then
+		return nil
 	end
-	return folder
-end
-
--- Create sounds from Config data (ahora dentro del folder)
-local function createSoundsFromConfig(rig, terrorSoundsConfig)
-	if not terrorSoundsConfig or #terrorSoundsConfig == 0 then return nil end
 
 	local sounds = {}
 	local maxVolumes = {}
-	local folder = getOrCreateTerrorFolder()
+	local chaseSoundIndex = nil
 
-	-- Obtener nombre del killer/rig para el prefijo
-	local killerName = getKillerNameFromRig(rig) or "UnknownKiller"
+	for _, sound in ipairs(terrorFolder:GetChildren()) do
+		if sound:IsA("Sound") then
+			local layerIndex = sound:GetAttribute("LayerIndex")
+			if layerIndex then
+				sounds[layerIndex] = sound
+				maxVolumes[layerIndex] = sound:GetAttribute("MaxVolume") or 0.6
 
-	for i, soundData in ipairs(terrorSoundsConfig) do
-		local sound = Instance.new("Sound")
-		sound.Name = killerName .. "_" .. (soundData.Name or ("Layer" .. i))
-		sound.SoundId = soundData.Id or ""
-		sound.Volume = 0
-		sound.Looped = true
-		sound.Playing = false
-		sound.Parent = folder
-
-		maxVolumes[i] = soundData.Volume or MAX_VOLUME
-
-		if soundData.Chase == true then
-			sound:SetAttribute("Chase", true)
+				if sound:GetAttribute("IsChase") == true then
+					chaseSoundIndex = layerIndex
+				end
+			end
 		end
-
-		table.insert(sounds, sound)
 	end
 
-	return sounds, maxVolumes
-end
-
--- Load sounds from Config instead of rig folder
-local function loadSoundsFromConfig(rig)
-	if not rig then return nil end
-
-	local killerName = getKillerNameFromRig(rig)
-	if not killerName then return nil end
-
-	local killerConfig = loadKillerConfig(killerName)
-	if not killerConfig or not killerConfig.TerrorRadius or not killerConfig.TerrorRadius.Sounds then 
-		return nil 
+	-- Fallback: if no chase sound marked, use last layer
+	if not chaseSoundIndex and #sounds >= 4 then
+		chaseSoundIndex = #sounds
 	end
 
-	local terrorSounds = killerConfig.TerrorRadius.Sounds
-	return createSoundsFromConfig(rig, terrorSounds)
+	return sounds, maxVolumes, chaseSoundIndex
 end
 
 -- Helper: undetectable checks
@@ -240,136 +211,52 @@ local rigStateCache = {}
 local function ensureRigState(rig)
 	if rigStateCache[rig] then return rigStateCache[rig] end
 
-	local sounds, maxVolumes = loadSoundsFromConfig(rig)
+	-- ✅ Get sounds from server-sided character model
+	local sounds, maxVolumes, chaseSoundIndex = getTerrorSoundsFromRig(rig)
 	if not sounds then return nil end
 
 	local config = getRigConfig(rig)
 	local state = {
 		sounds = sounds,
-		maxVolumes = maxVolumes, 
-		chaseActive = false, 
-		chaseSoundIndex = nil,
+		maxVolumes = maxVolumes,
+		chaseActive = false,
+		chaseSoundIndex = chaseSoundIndex,
 		config = config
 	}
-
-	-- Detect which sound has attribute Chase = true
-	for i, s in ipairs(sounds) do
-		local attr = nil
-		pcall(function() attr = s:GetAttribute("Chase") end)
-		if attr == true then
-			state.chaseSoundIndex = i
-			break
-		end
-	end
-
-	-- Fallback to layer 4 if no chase sound found
-	if not state.chaseSoundIndex and #sounds >= 4 then
-		state.chaseSoundIndex = 4
-	end
 
 	rigStateCache[rig] = state
 	return state
 end
 
-local function cleanupUnusedSounds()
-	local folder = workspace:FindFirstChild(TERROR_FOLDER_NAME)
-	if not folder then return end
-
-	for _, sound in ipairs(folder:GetChildren()) do
-		if sound:IsA("Sound") and not sound.Playing then
-			pcall(function() sound:Destroy() end)
-		end
-	end
-end
-
 local function cleanupRigState(rig)
-	local state = rigStateCache[rig]
-	if state and state.sounds then
-		for _, sound in ipairs(state.sounds) do
-			if sound and sound:IsA("Sound") then
-				pcall(function()
-					sound:Stop()
-					sound:Destroy()
-				end)
-			end
-		end
-	end
 	rigStateCache[rig] = nil
 	rigConfigCache[rig] = nil
 end
 
--- Main loop
+-- Main loop variables
 local accumulator = 0
-local lastRoot = nil
 local activeRigStates = {}
 local ambientSound = nil
 local isAmbientFaded = false
 local lockedChaseRig = nil
 
--- ✅ FIX: Enhanced cleanup function
+-- ✅ Simplified cleanup (no need to destroy sounds anymore - server handles it)
 local function cleanTerrorSounds()
-	print("[TerrorRadius] Cleaning all terror sounds...")
-	
-	local folder = workspace:FindFirstChild(TERROR_FOLDER_NAME)
-	if folder then
-		for _, child in ipairs(folder:GetChildren()) do
-			if child:IsA("Sound") then
-				pcall(function()
-					child:Stop()
-					child:Destroy()
-				end)
-			end
-		end
-		pcall(function() folder:Destroy() end)
-	end
+	print("[TerrorRadius] Cleaning terror sound states...")
 
-	-- Reset all states
+	-- Just reset client-side state tracking
 	rigStateCache = {}
 	activeRigStates = {}
 	rigConfigCache = {}
 	lockedChaseRig = nil
-	
+
 	print("[TerrorRadius] Cleanup complete")
 end
 
--- ✅ FIX: Connect to StopTerrorSounds remote with WaitForChild
-local stopTerrorRemote = Remotes:WaitForChild("StopTerrorSounds", 10)
-if stopTerrorRemote then
-	stopTerrorRemote.OnClientEvent:Connect(cleanTerrorSounds)
-	print("[TerrorRadius] Connected to StopTerrorSounds remote")
-else
-	warn("[TerrorRadius] Failed to find StopTerrorSounds remote!")
-end
-
--- ✅ FIX: Also check for attribute-based flag (backup method)
-local lastStopFlag = 0
-task.spawn(function()
-	while true do
-		task.wait(0.5)
-		local currentFlag = ReplicatedStorage:GetAttribute("StopTerrorSoundsFlag")
-		if currentFlag and currentFlag ~= lastStopFlag then
-			lastStopFlag = currentFlag
-			cleanTerrorSounds()
-			print("[TerrorRadius] Detected StopTerrorSoundsFlag attribute change")
-		end
-	end
-end)
-
--- Llamado periódico para limpiar sonidos
-RunService.Heartbeat:Connect(function(dt)
-	accumulator = accumulator + dt
-	if accumulator >= 5 then -- cada 5 segundos
-		cleanupUnusedSounds()
-		accumulator = 0
-	end
-end)
-
+-- Character respawn cleanup
 player.CharacterAdded:Connect(function()
 	wait(0.05)
-
 	cleanTerrorSounds()
-
-	lastRoot = getCharRoot()
 	activeRigStates = {}
 	lockedChaseRig = nil
 end)
@@ -381,6 +268,7 @@ workspace.ChildRemoved:Connect(function(child)
 	end
 end)
 
+-- Main heartbeat loop
 RunService.Heartbeat:Connect(function(dt)
 	accumulator = accumulator + dt
 	if accumulator < UPDATE_INTERVAL then return end
@@ -577,7 +465,7 @@ RunService.Heartbeat:Connect(function(dt)
 			for i, s in ipairs(st.sounds) do
 				if i == st.chaseSoundIndex then
 					ensurePlaying(s)
-					local target = (st.maxVolumes and st.maxVolumes[i]) or MAX_VOLUME
+					local target = (st.maxVolumes and st.maxVolumes[i]) or 0.6
 					if s.Volume < target then
 						tweenVolume(s, target, 0.1)
 					end
@@ -629,7 +517,7 @@ RunService.Heartbeat:Connect(function(dt)
 					s.TimePosition = 0
 				end
 				ensurePlaying(s)
-				local target = (st.maxVolumes and st.maxVolumes[i]) or MAX_VOLUME
+				local target = (st.maxVolumes and st.maxVolumes[i]) or 0.6
 				tweenVolume(s, target, CROSSFADE_TIME)
 			else
 				if s.Playing or s.Volume > 0 then
@@ -643,7 +531,7 @@ RunService.Heartbeat:Connect(function(dt)
 		local currentSound = st.sounds[desiredIndex]
 		if currentSound and not currentSound.Playing then
 			ensurePlaying(currentSound)
-			local target = (st.maxVolumes and st.maxVolumes[desiredIndex]) or MAX_VOLUME
+			local target = (st.maxVolumes and st.maxVolumes[desiredIndex]) or 0.6
 			tweenVolume(currentSound, target, 0.1)
 		end
 		anyActive = true

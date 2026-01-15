@@ -114,6 +114,11 @@ function module.loadAsCharacter(player, characterName, characterSkin, team)
 		if success and behaviorClass and behaviorClass.new then
 			local behavior = behaviorClass.new(player, player.Character, configData)
 			activeBehaviors[player.UserId] = behavior
+			
+			if team == teams.Killers then
+				local TerrorSoundManager = require(game.ServerScriptService.TerrorSoundManager)
+				TerrorSoundManager:CreateTerrorSounds(player.Character)
+			end
 
 			print("✓ Initialized behavior for", player.Name, "as", characterName)
 

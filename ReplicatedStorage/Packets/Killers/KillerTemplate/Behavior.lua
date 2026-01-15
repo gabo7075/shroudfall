@@ -76,6 +76,7 @@ function Behavior.new(player, character, config)
 	self.Humanoid.Health = config.Health or 100
 
 	-- Initialize
+	self:SetupAnimations()
 	self:SetupRemotes()
 	self:StartLoops()
 	self:SetupAbilities()
@@ -96,6 +97,13 @@ end
 -- ===============================================
 -- REMOTE SETUP
 -- ===============================================
+function Behavior:SetupAnimations()
+	-- Send animation IDs to client so they can be loaded on-demand
+	task.spawn(function()
+		task.wait(0.2) -- Small delay to ensure client is ready
+		Remotes.SetupAnimations:FireClient(self.Player, self.Config.Animations or {}, "Killer")
+	end)
+end
 
 function Behavior:SetupRemotes()
 	-- Input handling
@@ -206,7 +214,7 @@ function Behavior:TakeDamage(damage, stunTime)
 
 	self.Humanoid.Health = math.max(0, self.Humanoid.Health - damage)
 
-	if stunTime and self.CanBeStunned then
+	if stunTime and stunTime > 0 and self.CanBeStunned then
 		self:Stun(stunTime)
 	end
 	return damage

@@ -7,12 +7,13 @@ return {
 	Exclusive = true,
 
 	-- Character Stats
+	Class = "Sentinel",
 	Health = 100,
 	Stamina = 100,
 	WalkSpeed = 12,
 	RunSpeed = 26,
-	StaminaLoss = 10,  -- Stamina lost per second while running
-	StaminaGain = 20,   -- Stamina gained per second while recovering
+	StaminaLoss = 10,
+	StaminaGain = 20,
 
 	-- Animation IDs (optional - will use defaults if not specified)
 	Animations = {

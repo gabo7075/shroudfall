@@ -11,8 +11,8 @@ return {
 	Stamina = 110,
 	WalkSpeed = 14,
 	RunSpeed = 28,
-	StaminaLoss = 10,  -- Stamina lost per second while running
-	StaminaGain = 20,   -- Stamina gained per second while recovering
+	StaminaLoss = 10,
+	StaminaGain = 20,
 
 	-- Animation IDs (optional - will use defaults if not specified)
 	Animations = {

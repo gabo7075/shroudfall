@@ -372,9 +372,9 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 				local BehaviorRegistry = require(game.ServerScriptService.BehaviorRegistry)
 				victimBehavior = BehaviorRegistry.get(victimPlayer)
 				if victimBehavior and type(victimBehavior.TakeDamage) == "function" then
-					-- Llamamos TakeDamage pero PASAMOS stunTime = 0
-					-- (el stun se aplica abajo en este mismo tick)
-					actualDamageDealt = victimBehavior:TakeDamage(damage, 0) or damage
+					-- FIX: Pass nil for stunTime here so TakeDamage returns immediately without yielding.
+					-- We handle the actual stun asynchronously at the bottom of this function.
+					actualDamageDealt = victimBehavior:TakeDamage(damage, nil) or damage
 				else
 					victimHum.Health = math.max(0, victimHum.Health - damage)
 					actualDamageDealt = damage
@@ -409,10 +409,8 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 			
 			-- APLICAR STUN (inmediato)
 			if stunTime and stunTime > 0 then
-				-- Si la behavior tiene Stun, usarla (no bloquear)
 				if victimBehavior and type(victimBehavior.Stun) == "function" then
 					task.spawn(function()
-						-- No pasamos por waits en el servidor principal; la behavior maneja anims/flags internamente
 						pcall(function() victimBehavior:Stun(stunTime) end)
 					end)
 				else
