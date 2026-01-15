@@ -37,8 +37,10 @@ createRemote("CharacterInput", "Event")         -- Client → Server: Input hand
 createRemote("SyncCharacterState", "Event")     -- Server → Client: State sync
 createRemote("SetupAbilities", "Event")         -- Server → Client: Ability UI setup
 createRemote("SetupAnimations", "Event")        -- ✅ FIX: Added this line!
+createRemote("LoadAnimations", "Event")         -- Alias: behaviors may call LoadAnimations
 createRemote("PlayAnimation", "Event")          -- Server → Client: Play animation
 createRemote("StopAnimation", "Event")          -- Server → Client: Stop animation
+createRemote("AnimationsLoaded", "Event")      -- Client → Server: ack that animations finished loading
 createRemote("ActivateAbilityCooldown", "Event") -- Server → Client: Start cooldown UI
 
 createRemote("RequestAbilities", "Event") -- Client → Server: ask server to resend ability data

@@ -3,7 +3,8 @@
 -- ============================================
 
 -- LocalScript: StarterPlayer > StarterCharacterScripts > CharacterClientHandler
--- Universal handler for client-side UI, animations, and input (Killers AND Survivors)
+-- Universal handler for client-side UI and input (Killers AND Survivors)
+-- NOTE: Animation loading is handled by Behavior modules, not here
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,10 +27,6 @@ local guiMod = require(gameGui.GuiModule)
 -- State
 local wantsToRun = false
 local abilities = {}
-local animations = {}
-local animationIds = {} -- ✅ Store ALL animation IDs here
-local animationsReady = false
-local characterType = nil
 local abilitiesRequested = false
 local currentState = {
 	Health = 100,
@@ -40,166 +37,12 @@ local currentState = {
 	WalkSpeed = 16,
 	CharacterType = "Unknown"
 }
+local characterType = nil
+local animations = {}
 
 -- ===============================================
--- FOOTSTEP HANDLING
+-- ABILITY SETUP FROM SERVER
 -- ===============================================
-
-local function footStep(frame)
-	if frame == "footstep" then
-		local hrp = character:FindFirstChild("HumanoidRootPart")
-		if not hrp then return end
-
-		if humanoid.FloorMaterial == Enum.Material.Grass or 
-			humanoid.FloorMaterial == Enum.Material.LeafyGrass or 
-			humanoid.FloorMaterial == Enum.Material.Snow or 
-			humanoid.FloorMaterial == Enum.Material.Sand or 
-			humanoid.FloorMaterial == Enum.Material.Mud then
-			local grassStep = hrp:FindFirstChild("GrassStep")
-			if grassStep then grassStep:Play() end
-		elseif humanoid.FloorMaterial ~= Enum.Material.Air then
-			local groundStep = hrp:FindFirstChild("GroundStep")
-			if groundStep then groundStep:Play() end
-		end
-	end
-end
-
--- ===============================================
--- ANIMATION SYSTEM (DYNAMIC)
--- ===============================================
-
-local function createAndLoadAnim(id, priority)
-	local animObj = Instance.new("Animation")
-	animObj.AnimationId = id
-	local track = humanoid:LoadAnimation(animObj)
-	track.Priority = priority or Enum.AnimationPriority.Idle
-	return track
-end
-
--- ✅ FIX: Load animation on-demand from stored IDs
-local function loadAnimationOnDemand(animName)
-	-- Check if already loaded as a track
-	if animations[animName] then
-		return animations[animName]
-	end
-
-	-- Check if we have the ID stored
-	local animId = animationIds[animName]
-	if not animId then
-		warn("[Client] No animation ID found for:", animName)
-		return nil
-	end
-
-	-- Load it now
-	local success, track = pcall(function()
-		return createAndLoadAnim(animId, Enum.AnimationPriority.Action)
-	end)
-
-	if success and track then
-		animations[animName] = track
-		print("[Client] Loaded animation on-demand:", animName)
-		return track
-	else
-		warn("[Client] Failed to load animation:", animName)
-		return nil
-	end
-end
-
--- Default animation IDs for Killers
-local defaultKillerAnimIds = {
-	Idle = "rbxassetid://134755063723435",
-	Walk = "rbxassetid://131769059732662",
-	Run = "rbxassetid://124573520877102",
-	StunStart = "rbxassetid://120826985941169",
-	StunLoop = "rbxassetid://74533868293322",
-	StunEnd = "rbxassetid://81361634197851",
-}
-
--- Default animation IDs for Survivors
-local defaultSurvivorAnimIds = {
-	Idle = "rbxassetid://139187437656429",
-	Walk = "rbxassetid://98546993310870",
-	Run = "rbxassetid://101089497691524",
-	InjuredIdle = "rbxassetid://96243184323491",
-	InjuredWalk = "rbxassetid://119088829288250",
-	InjuredRun = "rbxassetid://136315598224264",
-}
-
-local function setupAnimations(animIds, charType)
-	if not charType or charType == "Unknown" then
-		return
-	end
-
-	characterType = charType
-	animIds = animIds or (characterType == "Survivor" and defaultSurvivorAnimIds or defaultKillerAnimIds)
-
-	-- ✅ Store ALL animation IDs first
-	for name, id in pairs(animIds) do
-		animationIds[name] = id
-	end
-
-	-- ✅ Load ONLY core movement animations upfront
-	if characterType == "Survivor" then
-		-- Survivor core animations
-		animations.Idle = createAndLoadAnim(animIds.Idle)
-		animations.Walk = createAndLoadAnim(animIds.Walk)
-		animations.Run = createAndLoadAnim(animIds.Run)
-		animations.InjuredIdle = createAndLoadAnim(animIds.InjuredIdle)
-		animations.InjuredWalk = createAndLoadAnim(animIds.InjuredWalk)
-		animations.InjuredRun = createAndLoadAnim(animIds.InjuredRun)
-	else
-		-- Killer core animations
-		animations.Idle = createAndLoadAnim(animIds.Idle)
-		animations.Walk = createAndLoadAnim(animIds.Walk)
-		animations.Run = createAndLoadAnim(animIds.Run)
-
-		-- Killers need stun animations loaded upfront since they're used by behavior
-		if animIds.StunStart then
-			animations.StunStart = createAndLoadAnim(animIds.StunStart, Enum.AnimationPriority.Action4)
-		end
-		if animIds.StunLoop then
-			animations.StunLoop = createAndLoadAnim(animIds.StunLoop, Enum.AnimationPriority.Action3)
-		end
-		if animIds.StunEnd then
-			animations.StunEnd = createAndLoadAnim(animIds.StunEnd, Enum.AnimationPriority.Action4)
-		end
-	end
-
-	-- Connect footstep handlers to movement animations
-	if animations.Run and animations.Run.KeyframeReached then
-		animations.Run.KeyframeReached:Connect(footStep)
-	end
-	if animations.Walk and animations.Walk.KeyframeReached then
-		animations.Walk.KeyframeReached:Connect(footStep)
-	end
-	if animations.InjuredRun and animations.InjuredRun.KeyframeReached then
-		animations.InjuredRun.KeyframeReached:Connect(footStep)
-	end
-	if animations.InjuredWalk and animations.InjuredWalk.KeyframeReached then
-		animations.InjuredWalk.KeyframeReached:Connect(footStep)
-	end
-
-	animationsReady = true
-	print("[Client] Animation setup complete. Character type:", characterType)
-	print("[Client] Available animation IDs:", animationIds)
-end
-
--- ===============================================
--- REMOTE LISTENERS
--- ===============================================
-
-local setupAnimationsRemote = Remotes:WaitForChild("SetupAnimations", 10)
-if setupAnimationsRemote then
-	setupAnimationsRemote.OnClientEvent:Connect(function(animIds, charType)
-		print("[Client] Received animation setup from server")
-		setupAnimations(animIds, charType)
-	end)
-	print("[Client] Connected to SetupAnimations remote")
-else
-	warn("[Client] Failed to find SetupAnimations remote! Animations may not work correctly.")
-end
-
--- Setup abilities from server
 Remotes.SetupAbilities.OnClientEvent:Connect(function(abilityData)
 	abilitiesRequested = true
 	local abilitiesFolder = gameGui:FindFirstChild("Abilities") or gameGui:WaitForChild("Abilities")
@@ -274,14 +117,12 @@ end)
 Remotes.SyncCharacterState.OnClientEvent:Connect(function(state)
 	currentState = state
 
-	-- Update character type if different
-	if state.CharacterType and state.CharacterType ~= characterType then
+	-- Update local characterType for input logic
+	if state.CharacterType and state.CharacterType ~= "Unknown" then
 		characterType = state.CharacterType
-		setupAnimations(nil, characterType)
 	elseif not characterType then
 		if state.Stunned ~= nil then
 			characterType = "Killer"
-			setupAnimations(nil, characterType)
 		end
 	end
 
@@ -303,38 +144,92 @@ Remotes.SyncCharacterState.OnClientEvent:Connect(function(state)
 	barsGui.Stamina.Number.Text = math.floor(state.Stamina)
 end)
 
--- ✅ FIX: Play animations (with on-demand loading)
-Remotes.PlayAnimation.OnClientEvent:Connect(function(animName)
-	print("[Client] Play animation requested:", animName)
-
-	-- First check if it's already loaded
-	if animations[animName] then
-		animations[animName]:Play()
-		print("[Client] Playing pre-loaded animation:", animName)
-		return
-	end
-
-	-- Try to load it on-demand
-	local track = loadAnimationOnDemand(animName)
-	if track then
-		track:Play()
-		print("[Client] Playing on-demand animation:", animName)
-	else
-		warn("[Client] Animation not found:", animName)
-	end
-end)
-
--- Stop animations
-Remotes.StopAnimation.OnClientEvent:Connect(function(animName)
-	if animations[animName] then
-		animations[animName]:Stop()
-	end
-end)
-
 -- Activate cooldown
 Remotes.ActivateAbilityCooldown.OnClientEvent:Connect(function(abilityName, cooldown)
 	guiMod.activateAbilityGui(abilityName, cooldown)
 end)
+
+-- ===============================================
+-- ANIMATION HANDLERS (minimal)
+-- ===============================================
+
+local function createAndLoadAnim(id, priority)
+	local animObj = Instance.new("Animation")
+	animObj.AnimationId = id
+	local track = humanoid:LoadAnimation(animObj)
+	track.Priority = priority or Enum.AnimationPriority.Action
+	return track
+end
+
+-- Server behaviors fire this to the client to load animations
+if Remotes:FindFirstChild("LoadAnimations") then
+	Remotes.LoadAnimations.OnClientEvent:Connect(function(animTable)
+		if not animTable then return end
+
+		for name, id in pairs(animTable) do
+			if not animations[name] and id and id ~= "" then
+				local priority = Enum.AnimationPriority.Action
+				if name == "Idle" then
+					priority = Enum.AnimationPriority.Idle
+				elseif name == "Walk" or name == "Run" or name:match("Injured") then
+					priority = Enum.AnimationPriority.Core
+				end
+
+				local ok, track = pcall(function()
+					return createAndLoadAnim(id, priority)
+				end)
+
+				if ok and track then
+					animations[name] = track
+					if track.KeyframeReached then
+						pcall(function()
+							track.KeyframeReached:Connect(function(frame)
+								if frame == "footstep" then
+									local hrp = character:FindFirstChild("HumanoidRootPart")
+									if hrp then
+										local groundStep = hrp:FindFirstChild("GroundStep")
+										if groundStep then groundStep:Play() end
+									end
+								end
+							end)
+						end)
+					end
+				else
+					warn("[Client] Failed loading animation:", name, id)
+				end
+			end
+		end
+
+		-- Notify server that animations finished loading (once)
+		pcall(function()
+			if Remotes:FindFirstChild("AnimationsLoaded") then
+				Remotes.AnimationsLoaded:FireServer()
+			end
+		end)
+	end)
+end
+
+if Remotes:FindFirstChild("PlayAnimation") then
+	Remotes.PlayAnimation.OnClientEvent:Connect(function(animName)
+		if not animName then return end
+		local track = animations[animName]
+		if track then
+			track:Play()
+		else
+			warn("[Client] PlayAnimation: track not found:", animName)
+		end
+	end)
+end
+
+if Remotes:FindFirstChild("StopAnimation") then
+	Remotes.StopAnimation.OnClientEvent:Connect(function(animName)
+		if not animName then return end
+		local track = animations[animName]
+		if track then
+			track:Stop()
+		end
+	end)
+end
 
 -- ===============================================
 -- INPUT HANDLING
@@ -393,106 +288,6 @@ UserInputService.InputEnded:Connect(function(input, isTyping)
 
 	if input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.ButtonL2 then
 		endRun()
-	end
-end)
-
--- ===============================================
--- ANIMATION LOOP
--- ===============================================
-
-task.spawn(function()
-	while task.wait() do
-		if not animationsReady then
-			task.wait(0.1)
-		else
-			if characterType == "Survivor" then
-				-- Survivor animation logic
-				if currentState.Health > (currentState.MaxHealth / 2) then
-					-- Healthy animations
-					if animations.InjuredIdle then animations.InjuredIdle:Stop(0.5) end
-					if animations.InjuredWalk then animations.InjuredWalk:Stop(0.5) end
-					if animations.InjuredRun then animations.InjuredRun:Stop(0.5) end
-
-					if humanoid.MoveDirection == Vector3.zero then
-						if not animations.Idle.IsPlaying then
-							animations.Idle:Play()
-							animations.Walk:Stop()
-							animations.Run:Stop()
-						end
-					else
-						animations.Idle:Stop(0.5)
-
-						if currentState.Running then
-							if not animations.Run.IsPlaying then
-								animations.Run:Play(0.5)
-								animations.Walk:Stop(0.5)
-							end
-							animations.Run:AdjustSpeed(currentState.WalkSpeed / 22)
-						else
-							if not animations.Walk.IsPlaying then
-								animations.Walk:Play(0.5)
-								animations.Run:Stop(0.5)
-							end
-							animations.Walk:AdjustSpeed(currentState.WalkSpeed / 16)
-						end
-					end
-				else
-					-- Injured animations
-					animations.Idle:Stop(0.5)
-					animations.Walk:Stop(0.5)
-					animations.Run:Stop(0.5)
-
-					if humanoid.MoveDirection == Vector3.zero then
-						if not animations.InjuredIdle.IsPlaying then
-							animations.InjuredIdle:Play()
-							animations.InjuredWalk:Stop()
-							animations.InjuredRun:Stop()
-						end
-					else
-						animations.InjuredIdle:Stop(0.5)
-
-						if currentState.Running then
-							if not animations.InjuredRun.IsPlaying then
-								animations.InjuredRun:Play(0.5)
-								animations.InjuredWalk:Stop(0.5)
-							end
-							animations.InjuredRun:AdjustSpeed(currentState.WalkSpeed / 22)
-						else
-							if not animations.InjuredWalk.IsPlaying then
-								animations.InjuredWalk:Play(0.5)
-								animations.InjuredRun:Stop(0.5)
-							end
-							animations.InjuredWalk:AdjustSpeed(currentState.WalkSpeed / 16)
-						end
-					end
-				end
-			else
-				-- Killer animation logic
-				if humanoid.MoveDirection == Vector3.zero then
-					if not animations.Idle.IsPlaying then
-						animations.Idle:Play()
-						animations.Walk:Stop()
-						animations.Run:Stop()
-					end
-				else
-					animations.Idle:Stop(0.5)
-
-					if currentState.Running then
-						if not animations.Run.IsPlaying then
-							animations.Run:Play(0.5)
-							animations.Walk:Stop(0.5)
-						end
-						animations.Run:AdjustSpeed(currentState.WalkSpeed / 22)
-					else
-						if not animations.Walk.IsPlaying then
-							animations.Walk:Play(0.5)
-							animations.Run:Stop(0.5)
-						end
-						animations.Walk:AdjustSpeed(currentState.WalkSpeed / 16)
-					end
-				end
-			end
-		end
 	end
 end)
 

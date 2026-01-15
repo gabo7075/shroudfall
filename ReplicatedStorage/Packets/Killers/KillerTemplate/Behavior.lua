@@ -22,7 +22,7 @@ function Behavior.new(player, character, config)
 	self.Humanoid = character:FindFirstChildWhichIsA("Humanoid")
 	self.HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
 	self.Config = config
-	
+
 	local BehaviorRegistry = require(game.ServerScriptService.BehaviorRegistry)
 	BehaviorRegistry.register(self.Player, self)
 
@@ -37,7 +37,7 @@ function Behavior.new(player, character, config)
 	self.Stunned = false
 	self.NearSurvivor = false
 	self.WalkingBackwards = false
-	
+
 	-- Initialize sounds from config
 	self.Sounds = {}
 	if self.Config.Sounds then
@@ -47,9 +47,18 @@ function Behavior.new(player, character, config)
 			sound.SoundId = data.Id or ""
 			sound.Volume = data.Volume or 1
 			sound.PlaybackSpeed = data.PlaybackSpeed or 1
-			sound.Parent = self.HumanoidRootPart -- or Torso if you prefer
+			sound.Parent = self.HumanoidRootPart
 			self.Sounds[name] = sound
 		end
+	end
+
+	-- Initialize animations from config (CLIENT-SIDE)
+	self.Animations = {}
+	self.AnimationsReady = false
+	if self.Config.Animations then
+		task.spawn(function()
+			self:LoadAnimations()
+		end)
 	end
 
 	-- Ability cooldowns
@@ -76,11 +85,10 @@ function Behavior.new(player, character, config)
 	self.Humanoid.Health = config.Health or 100
 
 	-- Initialize
-	self:SetupAnimations()
 	self:SetupRemotes()
 	self:StartLoops()
 	self:SetupAbilities()
-	
+
 	if self.Character:GetAttribute("Resistance") == nil then
 		self.Character:SetAttribute("Resistance", 0)
 	end
@@ -95,15 +103,94 @@ function Behavior.new(player, character, config)
 end
 
 -- ===============================================
+-- ANIMATION LOADING (CLIENT-SIDE)
+-- ===============================================
+
+function Behavior:LoadAnimations()
+	if RunService:IsServer() then
+		-- Send animation config to client and wait for client ack
+		Remotes.LoadAnimations:FireClient(self.Player, self.Config.Animations)
+
+		local loaded = false
+		local conn
+		conn = Remotes.AnimationsLoaded.OnServerEvent:Connect(function(plr)
+			if plr == self.Player then
+				loaded = true
+				conn:Disconnect()
+			end
+		end)
+
+		local timeout = 1 -- seconds
+		local t0 = tick()
+		while not loaded and tick() - t0 < timeout do
+			task.wait(0.03)
+		end
+		if not loaded then
+			warn("[Behavior] Client did not acknowledge animations load for", self.Player and self.Player.Name)
+		else
+			self.AnimationsReady = true
+		end
+		return
+	end
+
+	-- CLIENT-SIDE: Create and load animation tracks
+	for animName, animId in pairs(self.Config.Animations) do
+		local animObj = Instance.new("Animation")
+		animObj.AnimationId = animId
+		animObj.Name = animName
+
+		local priority = Enum.AnimationPriority.Action
+		if animName == "Idle" then
+			priority = Enum.AnimationPriority.Idle
+		elseif animName == "Walk" or animName == "Run" then
+			priority = Enum.AnimationPriority.Core
+		end
+
+		local track = self.Humanoid:LoadAnimation(animObj)
+		track.Priority = priority
+		self.Animations[animName] = track
+
+		print("[Behavior] Loaded animation:", animName)
+	end
+end
+
+function Behavior:PlayAnimation(animName)
+	if RunService:IsServer() then
+		local t0 = tick()
+		while not self.AnimationsReady and tick() - t0 < 0.6 do
+			task.wait(0.03)
+		end
+		Remotes.PlayAnimation:FireClient(self.Player, animName)
+		return
+	end
+
+	-- CLIENT-SIDE
+	if self.Animations[animName] then
+		self.Animations[animName]:Play()
+	else
+		warn("[Behavior] Animation not found:", animName)
+	end
+end
+
+function Behavior:StopAnimation(animName)
+	if RunService:IsServer() then
+		local t0 = tick()
+		while not self.AnimationsReady and tick() - t0 < 0.6 do
+			task.wait(0.03)
+		end
+		Remotes.StopAnimation:FireClient(self.Player, animName)
+		return
+	end
+
+	-- CLIENT-SIDE
+	if self.Animations[animName] then
+		self.Animations[animName]:Stop()
+	end
+end
+
+-- ===============================================
 -- REMOTE SETUP
 -- ===============================================
-function Behavior:SetupAnimations()
-	-- Send animation IDs to client so they can be loaded on-demand
-	task.spawn(function()
-		task.wait(0.2) -- Small delay to ensure client is ready
-		Remotes.SetupAnimations:FireClient(self.Player, self.Config.Animations or {}, "Killer")
-	end)
-end
 
 function Behavior:SetupRemotes()
 	-- Input handling
@@ -224,7 +311,6 @@ function Behavior:CalculateDamageOutput(baseDamage)
 	local strength = self.Character:GetAttribute("Strength") or 0
 
 	if strength > 0 then
-		-- Aumenta daño un 20% por nivel (ajustable)
 		baseDamage = math.round(baseDamage * ((strength / 5) + 1))
 	end
 
@@ -237,15 +323,15 @@ function Behavior:Stun(duration)
 	self.Stunned = true
 	self.CanBeStunned = false
 
-	-- Play stun animations on client
-	Remotes.PlayAnimation:FireClient(self.Player, "StunStart")
-	Remotes.PlayAnimation:FireClient(self.Player, "StunLoop")
+	-- Play stun animations
+	self:PlayAnimation("StunStart")
+	self:PlayAnimation("StunLoop")
 
 	task.wait(duration)
 
-	Remotes.PlayAnimation:FireClient(self.Player, "StunEnd")
-	Remotes.StopAnimation:FireClient(self.Player, "StunStart")
-	Remotes.StopAnimation:FireClient(self.Player, "StunLoop")
+	self:PlayAnimation("StunEnd")
+	self:StopAnimation("StunStart")
+	self:StopAnimation("StunLoop")
 
 	self.Stunned = false
 
@@ -258,7 +344,6 @@ end
 -- ===============================================
 
 function Behavior:SetupAbilities()
-	-- Send ability info to client for UI (slight delay to ensure client listeners are ready)
 	local abilities = {
 		{
 			Name = self.Config.Ability1Name or "Punch",
@@ -298,20 +383,17 @@ function Behavior:Ability1()
 	self.CanUseAbilities = false
 	self.AbilityCooldowns.Ability1 = true
 
-	-- Unequip tools
 	self.Humanoid:UnequipTools()
 
-	local attackCFrame = self.HumanoidRootPart.CFrame
-
 	-- Play animation
-	Remotes.PlayAnimation:FireClient(self.Player, "Punch")
+	self:PlayAnimation("Punch")
 
 	-- Start cooldown
 	task.spawn(function()
 		Remotes.ActivateAbilityCooldown:FireClient(self.Player, 
 			self.Config.Ability1Name or "Punch", 
 			self.Config.Ability1Cooldown or 1.6)
-		task.wait(self.Config.Ability1Cooldown or 1.6)
+		task.wait((self.Config.Ability1Cooldown or 1.6) + 0.15) --finishes early server side
 		self.AbilityCooldowns.Ability1 = false
 	end)
 
@@ -322,11 +404,11 @@ function Behavior:Ability1()
 		end
 	end)
 
-	-- Hitbox (with Strength modifier applied)
+	-- Hitbox
 	task.delay(0.22, function()
 		local finalDamage = self:CalculateDamageOutput(self.Config.Ability1Damage or 25)
 		self:CreateMeleeHitbox(
-			finalDamage,  -- Now uses Strength-modified damage
+			finalDamage,
 			self.Config.Ability1Knockback or 15,
 			"SurvivorHit",
 			nil,
@@ -339,7 +421,6 @@ function Behavior:Ability1()
 		)
 	end)
 
-	-- Wait for animation
 	task.wait(self.Config.Ability1AnimLength or 1)
 	self.CanUseAbilities = true
 end
@@ -350,16 +431,14 @@ function Behavior:Ability2()
 	self.CanUseAbilities = false
 	self.AbilityCooldowns.Ability2 = true
 
-	-- Apply speed boost
 	Remotes.GiveEffect:FireClient(self.Player, "speed", 5, 2, true)
 	Remotes.GiveEffect:FireClient(self.Player, "strength", 5, 1, true)
 
-	-- Cooldown
 	task.spawn(function()
 		Remotes.ActivateAbilityCooldown:FireClient(self.Player, 
 			self.Config.Ability2Name or "Effect", 
 			self.Config.Ability2Cooldown or 4)
-		task.wait(self.Config.Ability2Cooldown or 4)
+		task.wait((self.Config.Ability2Cooldown or 4) + 0.15) --finishes early server side
 		self.AbilityCooldowns.Ability2 = false
 	end)
 
@@ -374,7 +453,7 @@ function Behavior:Ability3()
 	self.AbilityCooldowns.Ability3 = true
 
 	self.Humanoid:UnequipTools()
-	Remotes.PlayAnimation:FireClient(self.Player, "Punch")
+	self:PlayAnimation("Punch")
 
 	task.delay(0.15, function()
 		if self.Sounds.Swing then
@@ -385,7 +464,7 @@ function Behavior:Ability3()
 	task.delay(0.22, function()
 		local finalDamage = self:CalculateDamageOutput(self.Config.Ability3Damage or 30)
 		self:CreateMeleeHitbox(
-			finalDamage,  -- Now uses Strength-modified damage
+			finalDamage,
 			self.Config.Ability3Knockback or 30,
 			"Ability3Hit",
 			function(victim)
@@ -412,7 +491,7 @@ function Behavior:Ability3()
 		Remotes.ActivateAbilityCooldown:FireClient(self.Player, 
 			self.Config.Ability3Name or "Special", 
 			self.Config.Ability3Cooldown or 1.6)
-		task.wait(self.Config.Ability3Cooldown or 1.6)
+		task.wait((self.Config.Ability3Cooldown or 1.6) + 0.15) --finishes early server side
 		self.AbilityCooldowns.Ability3 = false
 	end)
 
@@ -432,7 +511,7 @@ function Behavior:Ability4()
 		Remotes.ActivateAbilityCooldown:FireClient(self.Player, 
 			self.Config.Ability4Name or "Locate", 
 			self.Config.Ability4Cooldown or 7)
-		task.wait(self.Config.Ability4Cooldown or 7)
+		task.wait((self.Config.Ability4Cooldown or 7) + 0.15) --finishes early server side
 		self.AbilityCooldowns.Ability4 = false
 	end)
 
@@ -446,7 +525,7 @@ end
 
 function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback, hitboxSize, hitboxOffset, hitboxCount, hitboxDelay, hitboxDuration, hitSoundName)
 	hitboxSize = hitboxSize or Vector3.new(4.3, 5.2, 5.2)
-	hitboxOffset = hitboxOffset or CFrame.new(0, 0, -1.5) -- ✅ Changed to CFrame
+	hitboxOffset = hitboxOffset or CFrame.new(0, 0, -1.5)
 	hitboxCount = hitboxCount or 7
 	hitboxDelay = hitboxDelay or 0.03
 	hitboxDuration = hitboxDuration or 0.125
@@ -455,7 +534,6 @@ function Behavior:CreateMeleeHitbox(damage, knockback, rewardType, onHitCallback
 	local hitTable = {}
 
 	for i = 1, hitboxCount do
-		-- ✅ DON'T create attachment - pass HumanoidRootPart directly with offset
 		local hitbox = HitboxMod.create(self.HumanoidRootPart, hitboxSize, hitboxDuration, hitboxOffset)
 
 		hitbox.Touched:Connect(function(hit)
@@ -517,7 +595,6 @@ function Behavior:ApplyKnockback(victim, direction, power)
 	local hrp = victim:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 
-	-- Clean previous
 	for _, force in ipairs(hrp:GetChildren()) do
 		if force:IsA("LinearVelocity") or force:IsA("VectorForce") then
 			force:Destroy()
@@ -556,7 +633,6 @@ end
 -- ===============================================
 
 function Behavior:CanUseAbility(abilityName)
-	-- ✅ FIX: Leer atributo Helpless
 	local helpless = self.Character:GetAttribute("Helpless") or 0
 
 	local isRagdoll = self.Character:FindFirstChild("IsRagdoll")
@@ -566,7 +642,7 @@ function Behavior:CanUseAbility(abilityName)
 		self.Humanoid.Health > 0 and 
 		not self.AbilityCooldowns[abilityName] and 
 		helpless <= 0 and
-		not ragdolled and -- ✅ Prevent abilities while ragdolled
+		not ragdolled and
 		not self.Character:GetAttribute("ActiveTool") and 
 		not self.Stunned
 end
@@ -592,13 +668,11 @@ function Behavior:GiveReward(rewardType)
 	local customReward = customRewards[rewardType]
 
 	if customReward then
-		-- Handle custom reward
 		local killerName = self.Player.EquippedKiller.Value or "Killer"
 		local message = string.format(customReward.messageTemplate or "%s", killerName)
 		local money = customReward.money or 0
 		local malice = customReward.malice or 0
 
-		-- Add money to leaderstats (SERVER SIDE)
 		local leaderstats = self.Player:FindFirstChild("leaderstats")
 		if not leaderstats then
 			leaderstats = Instance.new("Folder")
@@ -615,7 +689,6 @@ function Behavior:GiveReward(rewardType)
 		end
 		moneyVal.Value = moneyVal.Value + money
 
-		-- Add malice to leaderstats (SERVER SIDE)
 		local maliceVal = leaderstats:FindFirstChild("Killer Chance")
 		if not maliceVal then
 			maliceVal = Instance.new("NumberValue")
@@ -625,16 +698,13 @@ function Behavior:GiveReward(rewardType)
 		end
 		maliceVal.Value = maliceVal.Value + malice
 
-		-- Show popup to client
 		Remotes.GiveReward:FireClient(self.Player, message, money, malice)
 	else
-		-- Handle default reward
 		local defaultReward = RewardModule.DefaultRewards[rewardType]
 		if defaultReward then
 			local money = defaultReward.money or 0
 			local malice = defaultReward.malice or 0
 
-			-- Add money to leaderstats (SERVER SIDE)
 			local leaderstats = self.Player:FindFirstChild("leaderstats")
 			if not leaderstats then
 				leaderstats = Instance.new("Folder")
@@ -651,7 +721,6 @@ function Behavior:GiveReward(rewardType)
 			end
 			moneyVal.Value = moneyVal.Value + money
 
-			-- Add malice to leaderstats (SERVER SIDE)
 			local maliceVal = leaderstats:FindFirstChild("Killer Chance")
 			if not maliceVal then
 				maliceVal = Instance.new("NumberValue")
@@ -661,7 +730,6 @@ function Behavior:GiveReward(rewardType)
 			end
 			maliceVal.Value = maliceVal.Value + malice
 
-			-- Show popup to client
 			Remotes.GiveReward:FireClient(self.Player, defaultReward.message, money, malice)
 		end
 	end
@@ -784,7 +852,6 @@ end
 function Behavior:Destroy()
 	local BehaviorRegistry = require(game.ServerScriptService.BehaviorRegistry)
 	BehaviorRegistry.unregister(self.Player)
-	-- luego tu cleanup normal
 
 	for _, connection in ipairs(self.Connections) do
 		connection:Disconnect()

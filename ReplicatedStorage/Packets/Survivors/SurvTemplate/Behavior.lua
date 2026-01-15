@@ -44,6 +44,14 @@ function Behavior.new(player, character, config)
 			self.Sounds[name] = sound
 		end
 	end
+	-- Initialize animations from config (CLIENT-SIDE)
+	self.Animations = {}
+	self.AnimationsReady = false
+	if self.Config.Animations then
+		task.spawn(function()
+			self:LoadAnimations()
+		end)
+	end
 	-- Ability cooldowns
 	self.AbilityCooldowns = {
 		Ability1 = false,
@@ -63,7 +71,6 @@ function Behavior.new(player, character, config)
 	self.Humanoid.MaxHealth = config.Health or 100
 	self.Humanoid.Health = config.Health or 100
 	-- Initialize
-	self:SetupAnimations()
 	self:SetupRemotes()
 	self:StartLoops()
 	self:SetupAbilities()
@@ -82,17 +89,94 @@ function Behavior.new(player, character, config)
 end
 
 -- ===============================================
--- REMOTE SETUP
+-- ANIMATION LOADING (CLIENT-SIDE)
 -- ===============================================
-function Behavior:SetupAnimations()
-	-- Send animation IDs to client so they can be loaded on-demand
-	task.spawn(function()
-		task.wait(0.2) -- Small delay to ensure client is ready
-		Remotes.SetupAnimations:FireClient(self.Player, self.Config.Animations or {}, "Survivor")
-	end)
+
+function Behavior:LoadAnimations()
+	if RunService:IsServer() then
+		-- Send animation config to client and wait for client ack
+		Remotes.LoadAnimations:FireClient(self.Player, self.Config.Animations)
+
+		local loaded = false
+		local conn
+		conn = Remotes.AnimationsLoaded.OnServerEvent:Connect(function(plr)
+			if plr == self.Player then
+				loaded = true
+				conn:Disconnect()
+			end
+		end)
+
+		local timeout = 1 -- seconds
+		local t0 = tick()
+		while not loaded and tick() - t0 < timeout do
+			task.wait(0.03)
+		end
+		if not loaded then
+			warn("[Behavior] Client did not acknowledge animations load for", self.Player and self.Player.Name)
+		else
+			self.AnimationsReady = true
+		end
+		return
+	end
+
+	-- CLIENT-SIDE: Create and load animation tracks
+	for animName, animId in pairs(self.Config.Animations) do
+		local animObj = Instance.new("Animation")
+		animObj.AnimationId = animId
+		animObj.Name = animName
+
+		local priority = Enum.AnimationPriority.Action
+		if animName == "Idle" then
+			priority = Enum.AnimationPriority.Idle
+		elseif animName == "Walk" or animName == "Run" or animName:match("Injured") then
+			priority = Enum.AnimationPriority.Core
+		end
+
+		local track = self.Humanoid:LoadAnimation(animObj)
+		track.Priority = priority
+		self.Animations[animName] = track
+
+		print("[Behavior] Loaded animation:", animName)
+	end
 end
 
-function Behavior:SetupRemotes()
+function Behavior:PlayAnimation(animName)
+	if RunService:IsServer() then
+		local t0 = tick()
+		while not self.AnimationsReady and tick() - t0 < 0.6 do
+			task.wait(0.03)
+		end
+		Remotes.PlayAnimation:FireClient(self.Player, animName)
+		return
+	end
+
+	-- CLIENT-SIDE
+	if self.Animations[animName] then
+		self.Animations[animName]:Play()
+	else
+		warn("[Behavior] Animation not found:", animName)
+	end
+end
+
+function Behavior:StopAnimation(animName)
+	if RunService:IsServer() then
+		local t0 = tick()
+		while not self.AnimationsReady and tick() - t0 < 0.6 do
+			task.wait(0.03)
+		end
+		Remotes.StopAnimation:FireClient(self.Player, animName)
+		return
+	end
+
+	-- CLIENT-SIDE
+	if self.Animations[animName] then
+		self.Animations[animName]:Stop()
+	end
+end
+
+-- ===============================================
+-- REMOTE SETUP
+-- ===============================================
 	-- Input handling
 	table.insert(self.Connections, Remotes.CharacterInput.OnServerEvent:Connect(function(plr, inputType, ...)
 		if plr ~= self.Player then return end
