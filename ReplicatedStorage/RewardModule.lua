@@ -12,11 +12,9 @@ module.DefaultRewards = {
 
 -- Function to create a reward pop-up (client-side)
 function module.showRewardPopup(player, message, money, malice)
-	money = money or 0
-	malice = malice or 0
 	local playerGui = player:WaitForChild("PlayerGui")
 	local rewardGui = playerGui:FindFirstChild("RewardGui")
-
+	
 	if not rewardGui then
 		rewardGui = Instance.new("ScreenGui")
 		rewardGui.Name = "RewardGui"
@@ -24,7 +22,7 @@ function module.showRewardPopup(player, message, money, malice)
 		rewardGui.DisplayOrder = 100
 		rewardGui.Parent = playerGui
 	end
-
+	
 	-- Count existing notifications
 	local existingNotifs = {}
 	for _, child in ipairs(rewardGui:GetChildren()) do
@@ -32,13 +30,13 @@ function module.showRewardPopup(player, message, money, malice)
 			table.insert(existingNotifs, child)
 		end
 	end
-
+	
 	-- Remove oldest if we have 3 already
 	if #existingNotifs >= 3 then
 		existingNotifs[1]:Destroy()
 		table.remove(existingNotifs, 1)
 	end
-
+	
 	-- Move existing notifications up
 	for i, notif in ipairs(existingNotifs) do
 		notif:TweenPosition(
@@ -49,7 +47,7 @@ function module.showRewardPopup(player, message, money, malice)
 			true
 		)
 	end
-
+	
 	-- Create new notification
 	local notification = Instance.new("TextLabel")
 	notification.Name = "RewardNotification"
@@ -73,7 +71,7 @@ function module.showRewardPopup(player, message, money, malice)
 	notification.Text = rewardText
 	notification.TextTransparency = 1
 	notification.Parent = rewardGui
-
+	
 	-- Fade in
 	notification:TweenPosition(
 		UDim2.new(0.5, 0, 0.1, 0),  -- Same as initial
@@ -82,10 +80,10 @@ function module.showRewardPopup(player, message, money, malice)
 		0.5,
 		true
 	)
-
+	
 	local tweenService = game:GetService("TweenService")
 	tweenService:Create(notification, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
-
+	
 	-- Wait and fade out
 	task.delay(3, function()
 		tweenService:Create(notification, TweenInfo.new(0.5), {TextTransparency = 1}):Play()

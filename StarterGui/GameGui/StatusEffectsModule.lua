@@ -119,8 +119,7 @@ end
 
 function module.speed(length, amount, visible)
 	local clone = guiMod.createEffectClone("Speed", length, amount)
-	local delta = 2.5 * amount
-	remotes.StatusEffects.Speed:FireServer(char, delta)
+	char:SetAttribute("IntendedWalkSpeed", char:GetAttribute("IntendedWalkSpeed") + (2.5 * amount))
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -129,13 +128,12 @@ function module.speed(length, amount, visible)
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
 
-	remotes.StatusEffects.Speed:FireServer(char, -delta)
+	char:SetAttribute("IntendedWalkSpeed", char:GetAttribute("IntendedWalkSpeed") - (2.5 * amount))
 end
 
 function module.slow(length, amount, visible)
 	local clone = guiMod.createEffectClone("Slowness", length, amount)
-	local delta = -2.5 * amount
-	remotes.StatusEffects.Slow:FireServer(char, delta)
+	char:SetAttribute("IntendedWalkSpeed", char:GetAttribute("IntendedWalkSpeed") - (2.5 * amount))
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -144,7 +142,7 @@ function module.slow(length, amount, visible)
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
 
-	remotes.StatusEffects.Slow:FireServer(char, -delta)
+	char:SetAttribute("IntendedWalkSpeed", char:GetAttribute("IntendedWalkSpeed") + (2.5 * amount))
 end
 
 function module.invisible(length, amount, visible)
@@ -292,30 +290,9 @@ function module.regen(length, amount, visible)
 	regen = false
 end
 
--- StatusEffectsModule.lua (Fragmentos a reemplazar)
-
-function module.strength(length, amount, visible)
-	local clone = guiMod.createEffectClone("Strength", length, amount)
-
-	-- 🔥 FIX: Avisar al servidor
-	remotes.StatusEffects.Strength:FireServer(char, amount)
-
-	if visible ~= nil then
-		clone.Visible = visible
-	end
-
-	guiMod.countDown(clone.Number, length)
-	clone:Destroy()
-
-	-- 🔥 FIX: Retirar efecto en servidor
-	remotes.StatusEffects.Strength:FireServer(char, -amount)
-end
-
 function module.weak(length, amount, visible)
 	local clone = guiMod.createEffectClone("Weakness", length, amount)
-
-	-- 🔥 FIX: Avisar al servidor
-	remotes.StatusEffects.Weakness:FireServer(char, amount)
+	plr.PlayerGui.GameGui.Stats.Weakness.Value += amount
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -323,15 +300,12 @@ function module.weak(length, amount, visible)
 
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
-
-	remotes.StatusEffects.Weakness:FireServer(char, -amount)
+	plr.PlayerGui.GameGui.Stats.Weakness.Value -= amount
 end
 
 function module.resist(length, amount, visible)
 	local clone = guiMod.createEffectClone("Resistance", length, amount)
-
-	-- 🔥 FIX: Avisar al servidor
-	remotes.StatusEffects.Resistance:FireServer(char, amount)
+	plr.PlayerGui.GameGui.Stats.Resistance.Value += amount
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -339,15 +313,12 @@ function module.resist(length, amount, visible)
 
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
-
-	remotes.StatusEffects.Resistance:FireServer(char, -amount)
+	plr.PlayerGui.GameGui.Stats.Resistance.Value -= amount
 end
 
 function module.helpless(length, amount, visible)
 	local clone = guiMod.createEffectClone("Helpless", length, amount)
-
-	-- 🔥 FIX: Avisar al servidor
-	remotes.StatusEffects.Helpless:FireServer(char, amount)
+	plr.PlayerGui.GameGui.Stats.Helpless.Value += amount
 
 	if visible ~= nil then
 		clone.Visible = visible
@@ -355,8 +326,7 @@ function module.helpless(length, amount, visible)
 
 	guiMod.countDown(clone.Number, length)
 	clone:Destroy()
-
-	remotes.StatusEffects.Helpless:FireServer(char, -amount)
+	plr.PlayerGui.GameGui.Stats.Helpless.Value -= amount
 end
 
 function module.blindness(length, amount, visible)

@@ -191,13 +191,6 @@ function module.checkForLMS()
 		-- Get LMS music and time based on conditions
 		local musicName, newTime = lmsManager.checkLMSConditions(killer, survivor)
 
-		if killer.Character then
-			local terrorSounds = killer.Character:FindFirstChild("TerrorSounds")
-			if terrorSounds then
-				terrorSounds:Destroy()
-			end
-		end
-
 		-- Play the appropriate music
 		local lmsMusic = workspace.LMS:FindFirstChild(musicName)
 		if lmsMusic then
@@ -206,6 +199,14 @@ function module.checkForLMS()
 
 		-- Set the new time
 		timerManager.setTime(newTime)
+
+		-- Remove terror sounds and map music
+		if killer.Character then
+			local terrorSounds = killer.Character:FindFirstChild("TerrorSounds")
+			if terrorSounds then
+				terrorSounds:Destroy()
+			end
+		end
 
 		local currentMap = workspace.GameDebris:FindFirstChild("CurrentMap")
 		if currentMap then

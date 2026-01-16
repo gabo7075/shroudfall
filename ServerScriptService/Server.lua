@@ -11,57 +11,6 @@ local gameMod = require(replicatedStorage.GameModule)
 local lmsManager = require(replicatedStorage.Modules.LMSManager)
 local timerManager = require(replicatedStorage.Modules.TimerManager)
 
-local function updateAttribute(char, attrName, amount)
-	if char then
-		local current = char:GetAttribute(attrName) or 0
-		char:SetAttribute(attrName, math.max(0, current + amount))
-	end
-end
-
--- ✅ NEW: Helper function to destroy terror sounds from a character
-local function destroyTerrorSounds(character)
-	if not character then return end
-
-	local terrorSounds = character:FindFirstChild("TerrorSounds")
-	if terrorSounds then
-		terrorSounds:Destroy()
-		print("[Server] Destroyed terror sounds from", character.Name)
-		return true
-	end
-	return false
-end
-
--- ✅ NEW: Stop terror sounds reliably (server + client signal)
-local function stopTerrorSoundsReliable(killerPlayer)
-	-- If specific killer provided, destroy their sounds
-	if killerPlayer and killerPlayer.Character then
-		destroyTerrorSounds(killerPlayer.Character)
-	else
-		-- Otherwise destroy all killer terror sounds
-		local killers = teams.Killers:GetPlayers()
-		for _, killer in ipairs(killers) do
-			if killer.Character then
-				destroyTerrorSounds(killer.Character)
-			end
-		end
-	end
-
-	-- Set attribute first
-	replicatedStorage:SetAttribute("StopTerrorSoundsFlag", tick())
-
-	-- Wait a frame to ensure attribute replicates
-	task.wait()
-
-	-- Fire to all clients
-	if remotes:FindFirstChild("StopTerrorSounds") then
-		remotes.StopTerrorSounds:FireAllClients()
-		print("[Server] Fired StopTerrorSounds to all clients")
-	end
-
-	-- Wait another frame to ensure clients process it
-	task.wait(0.1)
-end
-
 starterPlayer.CameraMaxZoomDistance = 30
 starterPlayer.EnableMouseLockOption = false
 
@@ -77,6 +26,11 @@ players.PlayerAdded:Connect(function(plr)
 	malice.Name = "Killer Chance"
 
 	plr.CharacterAdded:Connect(function(char)
+		-- Add neutral character script if no team
+		if plr.Team == nil then
+			packets.Neutral.CharacterScript:Clone().Parent = char
+		end
+
 		-- Handle death
 		char:FindFirstChildWhichIsA("Humanoid").Died:Connect(function()
 			if plr.Team == teams.Survivors then
@@ -98,29 +52,30 @@ players.PlayerAdded:Connect(function(plr)
 					-- Check if it's Double Trouble (2+ killers) or Standard (1 killer)
 					if #numOfKillers >= 2 then
 						-- Double Trouble LMS
-						-- ✅ Destroy all killer terror sounds
-						stopTerrorSoundsReliable()
-
 						local lmsMusic = workspace.LMS:FindFirstChild("LMSDoubleTrouble")
 						if lmsMusic then
 							lmsMusic:Play()
 						end
-
 						timerManager.setTime(44)
 					else
 						-- Standard LMS with 1 killer
 						local killer = numOfKillers[1]
-
-						-- ✅ Destroy the single killer's terror sounds
-						stopTerrorSoundsReliable(killer)
-
 						local musicName, newTime = lmsManager.checkLMSConditions(killer, survivor)
 						local lmsMusic = workspace.LMS:FindFirstChild(musicName)
 						if lmsMusic then
 							lmsMusic:Play()
 						end
-
 						timerManager.setTime(newTime)
+					end
+
+					-- Cleanup sounds
+					for i = 1, #numOfKillers do
+						if numOfKillers[i].Character then
+							local terrorSounds = numOfKillers[i].Character:FindFirstChild("TerrorSounds")
+							if terrorSounds then
+								terrorSounds:Destroy()
+							end
+						end
 					end
 
 					local currentMap = workspace.GameDebris:FindFirstChild("CurrentMap")
@@ -136,10 +91,6 @@ players.PlayerAdded:Connect(function(plr)
 
 			elseif plr.Team == teams.Killers then
 				plr.Team = nil
-
-				-- ✅ Clean up terror sounds when killer dies
-				destroyTerrorSounds(char)
-
 				local numOfKillers = teams.Killers:GetPlayers()
 				if #numOfKillers == 0 then
 					gameMod.setTime(0)
@@ -152,11 +103,6 @@ players.PlayerAdded:Connect(function(plr)
 end)
 
 players.PlayerRemoving:Connect(function(plr)
-	-- ✅ Clean up terror sounds when player leaves
-	if plr.Team == teams.Killers and plr.Character then
-		destroyTerrorSounds(plr.Character)
-	end
-
 	local numOfSurvivors = teams.Survivors:GetPlayers()
 	local numOfKillers = teams.Killers:GetPlayers()
 	local totalPlayers = (#numOfSurvivors + #numOfKillers)
@@ -176,9 +122,6 @@ players.PlayerRemoving:Connect(function(plr)
 			-- Check if Double Trouble or Standard
 			if #numOfKillers >= 2 then
 				-- Double Trouble LMS
-				-- ✅ Destroy all killer terror sounds
-				stopTerrorSoundsReliable()
-
 				gameMod.setTime(44)
 				local lmsMusic = workspace.LMS:FindFirstChild("LMSDoubleTrouble")
 				if lmsMusic then
@@ -186,12 +129,17 @@ players.PlayerRemoving:Connect(function(plr)
 				end
 			else
 				-- Standard LMS
-				local killer = numOfKillers[1]
-
-				-- ✅ Destroy the single killer's terror sounds
-				stopTerrorSoundsReliable(killer)
-
 				gameMod.setTime(75)
+			end
+
+			-- Cleanup sounds
+			for i = 1, #numOfKillers do
+				if numOfKillers[i].Character then
+					local terrorSounds = numOfKillers[i].Character:FindFirstChild("TerrorSounds")
+					if terrorSounds then
+						terrorSounds:Destroy()
+					end
+				end
 			end
 
 			local currentMap = workspace.GameDebris:FindFirstChild("CurrentMap")
@@ -207,7 +155,35 @@ players.PlayerRemoving:Connect(function(plr)
 	end
 end)
 
--- Heal handling for items
+-- Damage handling
+remotes.Damage.OnServerEvent:Connect(function(plr, killer, checking, victim, damage, stunTime, source)
+	if checking then
+		if players:GetPlayerFromCharacter(victim) then
+			remotes.Damage:FireClient(players:GetPlayerFromCharacter(victim), killer, damage, stunTime, source)
+		else
+			-- Check if NPC is immune to attacker's team
+			local immuneTeam = victim:GetAttribute("ImmuneToTeam")
+			if immuneTeam and plr.Team and plr.Team.Name == immuneTeam then
+				return
+			end
+			victim:FindFirstChildWhichIsA("Humanoid").Health -= damage
+			remotes.HitIndicator:FireClient(killer, victim.HumanoidRootPart.Position, damage)
+		end
+	else
+		if victim then
+			remotes.Connect:FireClient(killer, victim, source)
+			if victim:FindFirstChildWhichIsA("Humanoid").Health > 0 then
+				remotes.HitIndicator:FireClient(killer, victim.HumanoidRootPart.Position, damage)
+			end
+			victim:FindFirstChildWhichIsA("Humanoid").Health -= damage
+		else
+			remotes.Connect:FireClient(killer, plr.Character, source)
+			plr.Character:FindFirstChildWhichIsA("Humanoid").Health -= damage
+		end
+	end
+end)
+
+-- Heal handling
 remotes.Heal.OnServerEvent:Connect(function(plr, amount)
 	local char = plr.Character
 	if not char then return end
@@ -300,39 +276,6 @@ remotes.StatusEffects.Undetectable.OnServerEvent:Connect(function(plr, targetCha
 	targetChar:SetAttribute("Undetectable", math.max(0, current + deltaAmount))
 end)
 
--- Speed/Slow: Clients request server to modify IntendedWalkSpeed on THEIR character
-remotes.StatusEffects.Speed.OnServerEvent:Connect(function(plr, targetChar, deltaAmount)
-	if not targetChar or not targetChar.Parent then return end
-	if plr.Character ~= targetChar then return end
-	local delta = tonumber(deltaAmount) or 0
-	local current = targetChar:GetAttribute("IntendedWalkSpeed") or 16
-	targetChar:SetAttribute("IntendedWalkSpeed", math.max(0, current + delta))
-end)
-
-remotes.StatusEffects.Slow.OnServerEvent:Connect(function(plr, targetChar, deltaAmount)
-	if not targetChar or not targetChar.Parent then return end
-	if plr.Character ~= targetChar then return end
-	local delta = tonumber(deltaAmount) or 0
-	local current = targetChar:GetAttribute("IntendedWalkSpeed") or 16
-	targetChar:SetAttribute("IntendedWalkSpeed", math.max(0, current + delta))
-end)
-
-remotes.StatusEffects.Strength.OnServerEvent:Connect(function(player, char, amount)
-	updateAttribute(char, "Strength", amount)
-end)
-
-remotes.StatusEffects.Weakness.OnServerEvent:Connect(function(player, char, amount)
-	updateAttribute(char, "Weakness", amount)
-end)
-
-remotes.StatusEffects.Resistance.OnServerEvent:Connect(function(player, char, amount)
-	updateAttribute(char, "Resistance", amount)
-end)
-
-remotes.StatusEffects.Helpless.OnServerEvent:Connect(function(player, char, amount)
-	updateAttribute(char, "Helpless", amount)
-end)
-
 remotes.Delete.OnServerEvent:Connect(function(plr, obj)
 	obj:Destroy()
 end)
@@ -375,9 +318,9 @@ remotes.DamageKnockback.OnServerEvent:Connect(function(plr, victim, direction, p
 	if victimPlayer then
 		hrp:SetNetworkOwner(nil)
 	end
-
+	
 	hrp.AssemblyAngularVelocity = Vector3.zero
-
+	
 	-- Create attachment and force
 	local attachment = Instance.new("Attachment", hrp)
 	local knockback = Instance.new("LinearVelocity")
