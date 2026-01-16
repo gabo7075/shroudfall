@@ -8,7 +8,7 @@ local characterLoader = require(replicatedStorage.Modules.CharacterLoader)
 
 local currentGamemode = nil
 local waiting = false
-local lobbyTime = 20
+local lobbyTime = 30
 
 -- Public API for other scripts
 module.addTime = timerManager.addTime

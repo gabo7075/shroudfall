@@ -20,33 +20,24 @@ local function giveReward(player, rewardType)
 	local reward = rewardModule.DefaultRewards[rewardType]
 	if not reward then return end
 
-	-- Ensure leaderstats folder exists
+	-- Add money (assuming you have a Money value in leaderstats)
 	local leaderstats = player:FindFirstChild("leaderstats")
-	if not leaderstats then
-		leaderstats = Instance.new("Folder")
-		leaderstats.Name = "leaderstats"
-		leaderstats.Parent = player
-	end
+	if leaderstats then
+		local money = leaderstats:FindFirstChild("Money")
+		if not money then
+			money = Instance.new("IntValue")
+			money.Name = "Money"
+			money.Value = 0
+			money.Parent = leaderstats
+		end
+		money.Value = money.Value + reward.money
 
-	-- Add or create Money IntValue
-	local moneyVal = leaderstats:FindFirstChild("Money")
-	if not moneyVal then
-		moneyVal = Instance.new("IntValue")
-		moneyVal.Name = "Money"
-		moneyVal.Value = 0
-		moneyVal.Parent = leaderstats
+		-- Add malice
+		local malice = leaderstats:FindFirstChild("Killer Chance")
+		if malice then
+			malice.Value = malice.Value + reward.malice
+		end
 	end
-	moneyVal.Value = moneyVal.Value + (reward.money or 0)
-
-	-- Add or create Killer Chance (malice) value if applicable
-	local maliceVal = leaderstats:FindFirstChild("Killer Chance")
-	if not maliceVal then
-		maliceVal = Instance.new("NumberValue")
-		maliceVal.Name = "Killer Chance"
-		maliceVal.Value = 0
-		maliceVal.Parent = leaderstats
-	end
-	maliceVal.Value = maliceVal.Value + (reward.malice or 0)
 
 	-- Show popup to player
 	rewardRemote:FireClient(player, reward.message, reward.money, reward.malice)
@@ -108,34 +99,31 @@ remotes.GiveReward.OnServerEvent:Connect(function(player, messageOrType, money, 
 	money = math.clamp(money, 0, 1000)
 	malice = math.clamp(malice, 0, 10)
 
-	-- Ensure leaderstats exists
 	local leaderstats = player:FindFirstChild("leaderstats")
-	if not leaderstats then
-		leaderstats = Instance.new("Folder")
-		leaderstats.Name = "leaderstats"
-		leaderstats.Parent = player
-	end
+	if leaderstats then
+		local moneyValue = leaderstats:FindFirstChild("Money")
+		if not moneyValue then
+			moneyValue = Instance.new("IntValue")
+			moneyValue.Name = "Money"
+			moneyValue.Value = 0
+			moneyValue.Parent = leaderstats
+		end
+		moneyValue.Value = moneyValue.Value + money
 
-	-- Ensure Money exists
-	local moneyValue = leaderstats:FindFirstChild("Money")
-	if not moneyValue then
-		moneyValue = Instance.new("IntValue")
-		moneyValue.Name = "Money"
-		moneyValue.Value = 0
-		moneyValue.Parent = leaderstats
+		local maliceValue = leaderstats:FindFirstChild("Killer Chance")
+		if maliceValue then
+			maliceValue.Value = maliceValue.Value + malice
+		end
 	end
-	moneyValue.Value = moneyValue.Value + money
-
-	-- Ensure Killer Chance exists and add malice
-	local maliceValue = leaderstats:FindFirstChild("Killer Chance")
-	if not maliceValue then
-		maliceValue = Instance.new("NumberValue")
-		maliceValue.Name = "Killer Chance"
-		maliceValue.Value = 0
-		maliceValue.Parent = leaderstats
-	end
-	maliceValue.Value = maliceValue.Value + malice
 
 	-- Show popup
 	rewardRemote:FireClient(player, messageOrType, money, malice)
+end)
+
+-- Track damage to attribute kills properly
+remotes.Damage.OnServerEvent:Connect(function(plr, killer, checking, victim, damage, stunTime, source)
+	-- Store the attacker for this victim
+	if victim and killer then
+		lastAttacker[victim] = plr
+	end
 end)

@@ -3,106 +3,72 @@ local module = {}
 local tweenService = game:GetService("TweenService")
 local debris = game:GetService("Debris")
 local teams = game:GetService("Teams")
-local runService = game:GetService("RunService")
-local replicatedStorage = game:GetService("ReplicatedStorage")
 
--- Referencia segura al RemoteEvent
-local Remotes = replicatedStorage:WaitForChild("Remotes")
-local HighlightEvent = Remotes:FindFirstChild("HighlightTargets")
+function module.findPlayers(plrs, length)
+	for i = 1, #plrs do
+		task.spawn(function()
+			local character = plrs[i].Character
 
-function module.findPlayers(viewerOrTargets, targetsOrLength, lengthOrColor, colorOverride)
-	if runService:IsServer() then
-		-- Lógica de Servidor: Redirigir al cliente específico
-		local viewer = viewerOrTargets -- El jugador que VERÁ el highlight (ej: Killer)
-		local targets = targetsOrLength -- Lista de jugadores a marcar
-		local duration = lengthOrColor
-		local color = colorOverride
+			if character then
+				local und = character:GetAttribute("Undetectable") or 0
+				if und > 0 then return end
 
-		if viewer and HighlightEvent then
-			HighlightEvent:FireClient(viewer, "FindPlayers", targets, duration, color)
-		end
-	else
-		-- Lógica de Cliente: Crear visuales
-		local targets = viewerOrTargets -- En cliente, el primer arg son los objetivos
-		local length = targetsOrLength
-		local color = lengthOrColor
+				local high = Instance.new("Highlight")
+				if plrs[i].Team == teams.Survivors then
+					high.OutlineColor = Color3.fromRGB(255, 255, 0)
+					high.FillColor = Color3.fromRGB(255, 255, 0)
+				elseif plrs[i].Team == teams.Killers then
+					high.OutlineColor = Color3.fromRGB(255, 0, 0)
+					high.FillColor = Color3.fromRGB(255, 0, 0)
+				end
+				high.FillTransparency = 1
+				high.OutlineTransparency = 1
+				high.Parent = character
 
-		for i = 1, #targets do
-			task.spawn(function()
-				local player = targets[i]
-				if not player or not player.Character then return end
+				tweenService:Create(high, TweenInfo.new(1, Enum.EasingStyle.Linear), {
+					FillTransparency = 0.5,
+					OutlineTransparency = 0
+				}):Play()
 
-				module._createLocalHighlight(player.Character, length, player.Team, color)
-			end)
-		end
+				task.wait(length)
+
+				tweenService:Create(high, TweenInfo.new(1, Enum.EasingStyle.Linear), {
+					FillTransparency = 1,
+					OutlineTransparency = 1
+				}):Play()
+				debris:AddItem(high, 1)
+			end
+		end)
 	end
 end
 
-function module.highlightVictim(viewerOrVictim, victimOrLength, lengthOrColor, colorOverride)
-	if runService:IsServer() then
-		local viewer = viewerOrVictim
-		local victim = victimOrLength
-		local duration = lengthOrColor
-		local color = colorOverride
-
-		if viewer and HighlightEvent then
-			-- Pasamos al victim dentro de una tabla para reusar lógica si queremos, 
-			-- o mandamos un evento distinto. Aquí mandamos "HighlightVictim"
-			HighlightEvent:FireClient(viewer, "HighlightVictim", victim, duration, color)
-		end
-	else
-		local victim = viewerOrVictim
-		local length = victimOrLength
-		local color = lengthOrColor
-
+function module.highlightVictim(victim, length)
+	task.spawn(function()
 		if victim then
-			module._createLocalHighlight(victim, length, nil, color)
-		end
-	end
-end
+			local und = victim:GetAttribute("Undetectable") or 0
+			if und > 0 then return end
 
-function module._createLocalHighlight(character, length, team, customColor)
-	local und = character:GetAttribute("Undetectable") or 0
-	if und > 0 then return end
-
-	local high = Instance.new("Highlight")
-
-	-- Lógica de colores
-	if customColor then
-		-- Si pasamos un color manual (ej: Verde para Ability3)
-		high.OutlineColor = customColor
-		high.FillColor = customColor
-	elseif team then
-		-- Lógica por defecto de equipos (LMS)
-		if team == teams.Survivors then
-			high.OutlineColor = Color3.fromRGB(255, 255, 0) -- Amarillo
+			local high = Instance.new("Highlight")
+			high.OutlineColor = Color3.fromRGB(255, 255, 0)
 			high.FillColor = Color3.fromRGB(255, 255, 0)
-		elseif team == teams.Killers then
-			high.OutlineColor = Color3.fromRGB(255, 0, 0) -- Rojo
-			high.FillColor = Color3.fromRGB(255, 0, 0)
+			high.FillTransparency = 1
+			high.OutlineTransparency = 1
+			high.Parent = victim
+
+			tweenService:Create(high, TweenInfo.new(1, Enum.EasingStyle.Linear), {
+				FillTransparency = 0.5,
+				OutlineTransparency = 0
+			}):Play()
+
+			task.wait(length)
+
+			tweenService:Create(high, TweenInfo.new(1, Enum.EasingStyle.Linear), {
+				FillTransparency = 1,
+				OutlineTransparency = 1
+			}):Play()
+			debris:AddItem(high, 1)
 		end
-	else
-		-- Fallback
-		high.OutlineColor = Color3.fromRGB(255, 255, 255)
-		high.FillColor = Color3.fromRGB(255, 255, 255)
-	end
-
-	high.FillTransparency = 1
-	high.OutlineTransparency = 1
-	high.Parent = character
-
-	tweenService:Create(high, TweenInfo.new(1, Enum.EasingStyle.Linear), {
-		FillTransparency = 0.5,
-		OutlineTransparency = 0
-	}):Play()
-
-	task.wait(length)
-
-	tweenService:Create(high, TweenInfo.new(1, Enum.EasingStyle.Linear), {
-		FillTransparency = 1,
-		OutlineTransparency = 1
-	}):Play()
-	debris:AddItem(high, 1)
+	end)
 end
 
 -- Check if conditions for special LMS music are met
@@ -124,7 +90,7 @@ function module.checkLMSConditions(killer, survivor)
 		and survivor.Team == teams.Survivors and survivor.EquippedSurvivor.Value == "Ben" then
 		return "Slaughter", 96
 	end
-
+	
 	-- Jeff vs Jane
 	if killer.Team == teams.Killers and killer.EquippedKiller.Value == "Jeff The Killer"
 		and survivor.Team == teams.Survivors and survivor.EquippedSurvivor.Value == "Jane" 

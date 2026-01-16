@@ -2,7 +2,7 @@ local replicatedStorage = game:GetService("ReplicatedStorage")
 local uis = game:GetService("UserInputService")
 local player = game:GetService("Players").LocalPlayer
 local playerGui = player.PlayerGui
-local clones = replicatedStorage:WaitForChild("Clones")
+local clones = replicatedStorage.Clones
 
 local module = {}
 
@@ -27,84 +27,20 @@ end
 --=========== CREATE ABILITY GUI ===========--
 
 function module.createAbilityGui(name: string, image: string, key: string | Enum.KeyCode, currentCharges: number?, maxCharges: number?, instruction: string?)
-	local abilitiesFolder = playerGui:WaitForChild("GameGui"):WaitForChild("Abilities")
+	local gui = clones.AbilityTemplate:Clone()
+	gui.Name = name
+	gui.AbilityName.Text = name
 
-	local template = clones:FindFirstChild("AbilityTemplate")
-	local gui
-
-	if template then
-		gui = template:Clone()
-		gui.Name = name
+	-- Key display
+	if typeof(key) == "string" then
+		gui.AbilityKey.Text = key
 	else
-		-- AbilityTemplate missing in ReplicatedStorage.Clones; using fallback
-		-- Fallback minimal GUI when Clones/AbilityTemplate missing
-		gui = Instance.new("Frame")
-		gui.Name = name
-		gui.Size = UDim2.new(0, 120, 0, 48)
-		gui.BackgroundTransparency = 1
-
-		local icon = Instance.new("ImageButton")
-		icon.Name = "AbilityIcon"
-		icon.Size = UDim2.new(0, 48, 0, 48)
-		icon.Position = UDim2.new(0, 0, 0, 0)
-		icon.BackgroundTransparency = 1
-		icon.Image = image
-		icon.Parent = gui
-
-		local nameLbl = Instance.new("TextLabel")
-		nameLbl.Name = "AbilityName"
-		nameLbl.Size = UDim2.new(1, -52, 0.5, 0)
-		nameLbl.Position = UDim2.new(0, 52, 0, 0)
-		nameLbl.BackgroundTransparency = 1
-		nameLbl.Text = name
-		nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-		nameLbl.Parent = gui
-
-		local keyLbl = Instance.new("TextLabel")
-		keyLbl.Name = "AbilityKey"
-		keyLbl.Size = UDim2.new(1, -52, 0.5, 0)
-		keyLbl.Position = UDim2.new(0, 52, 0.5, 0)
-		keyLbl.BackgroundTransparency = 1
-		if typeof(key) == "string" then
-			keyLbl.Text = key
-		else
-			keyLbl.Text = uis:GetStringForKeyCode(key)
-		end
-		keyLbl.TextXAlignment = Enum.TextXAlignment.Left
-		keyLbl.Parent = gui
+		gui.AbilityKey.Text = uis:GetStringForKeyCode(key)
 	end
 
-	-- Apply common properties (works for template clones and fallback)
-	if gui:FindFirstChild("AbilityName") then
-		gui.AbilityName.Text = name
-	end
-	if gui:FindFirstChild("AbilityKey") then
-		if typeof(key) == "string" then
-			gui.AbilityKey.Text = key
-		else
-			gui.AbilityKey.Text = uis:GetStringForKeyCode(key)
-		end
-	end
-	if gui:FindFirstChild("AbilityIcon") then
-		-- If the template's AbilityIcon is not an ImageButton, still set its Image if possible
-		pcall(function()
-			gui.AbilityIcon.Image = image
-		end)
-		local iconObj = gui.AbilityIcon
-		if not iconObj:IsA("ImageButton") then
-			local clickBtn = Instance.new("ImageButton")
-			clickBtn.Name = "AbilityIconButton"
-			clickBtn.Size = iconObj.Size
-			clickBtn.Position = iconObj.Position
-			clickBtn.AnchorPoint = iconObj.AnchorPoint
-			clickBtn.BackgroundTransparency = 1
-			clickBtn.Image = image or (iconObj.Image or "")
-			clickBtn.ZIndex = (iconObj.ZIndex or 1) + 1
-			clickBtn.Parent = gui
-		end
-	end
-
-	gui.Parent = abilitiesFolder
+	-- Icon
+	gui.AbilityIcon.Image = image
+	gui.Parent = playerGui.GameGui.Abilities
 
 	local chargeLabel = gui:FindFirstChild("AbilityCharge")
 
@@ -177,56 +113,29 @@ function module.activateAbilityGui(name: string, cooldown: number)
 	local gui = playerGui.GameGui.Abilities:FindFirstChild(name)
 	if not gui then return end
 
-	if not gui:FindFirstChild("AbilityIcon") then return end
-	local icon = gui:FindFirstChild("AbilityIcon")
-	local timer = icon:FindFirstChild("AbilityTimer")
-	if not timer then
-		-- No timer element on template; just tint icon briefly
-		icon.ImageColor3 = Color3.new(0.5, 0.5, 0.5)
-		task.delay(cooldown or 1, function()
-			if icon and icon.Parent then
-				icon.ImageColor3 = Color3.new(1, 1, 1)
-			end
-		end)
-		return
-	end
-
+	local timer = gui.AbilityIcon.AbilityTimer
 	timer.Text = cooldown
 	timer.Visible = true
-	icon.ImageColor3 = Color3.new(0.5, 0.5, 0.5)
+	gui.AbilityIcon.ImageColor3 = Color3.new(0.5, 0.5, 0.5)
 
 	module.countDown(timer, cooldown)
 
 	timer.Visible = false
-	icon.ImageColor3 = Color3.new(1, 1, 1)
+	gui.AbilityIcon.ImageColor3 = Color3.new(1, 1, 1)
 end
 
 function module.forceCooldown(name: string, cooldown: number)
 	local abilities = playerGui:WaitForChild("GameGui"):WaitForChild("Abilities")
-	local success, gui = pcall(function() return abilities:WaitForChild(name) end)
-	if not success or not gui then return end
+	local gui = abilities:WaitForChild(name)
 
-	if not gui:FindFirstChild("AbilityIcon") then return end
-	local icon = gui:FindFirstChild("AbilityIcon")
-	local timer = icon:FindFirstChild("AbilityTimer")
-	if not timer then
-		icon.ImageColor3 = Color3.new(0.5, 0.5, 0.5)
-		task.spawn(function()
-			task.wait(cooldown or 1)
-			if icon and icon.Parent then
-				icon.ImageColor3 = Color3.new(1, 1, 1)
-			end
-		end)
-		return
-	end
-
+	local timer = gui.AbilityIcon.AbilityTimer
 	timer.Visible = true
-	icon.ImageColor3 = Color3.new(0.5, 0.5, 0.5)
+	gui.AbilityIcon.ImageColor3 = Color3.new(0.5, 0.5, 0.5)
 
 	task.spawn(function()
 		module.countDown(timer, cooldown)
 		timer.Visible = false
-		icon.ImageColor3 = Color3.new(1, 1, 1)
+		gui.AbilityIcon.ImageColor3 = Color3.new(1, 1, 1)
 	end)
 end
 
@@ -297,11 +206,6 @@ end
 --=========== STATUS EFFECT CLONES ===========--
 
 function module.createEffectClone(name, length, amount)
-	if not clones or not clones:FindFirstChild("EffectTemplate") then
-		warn("EffectTemplate missing in ReplicatedStorage.Clones; cannot create effect clone")
-		return nil
-	end
-
 	local clone = clones.EffectTemplate:Clone()
 
 	if amount then

@@ -259,15 +259,6 @@ function module.checkForLMS()
 			remotes.FindPlayers:FireClient(numOfKillers[i], numOfSurvivors, 5)
 		end
 
-		for i = 1, #numOfKillers do
-			if numOfKillers[i].Character then
-				local terrorSounds = numOfKillers[i].Character:FindFirstChild("TerrorSounds")
-				if terrorSounds then
-					terrorSounds:Destroy()
-				end
-			end
-		end
-
 		-- Double Trouble always plays its special LMS music, regardless of character matchups
 		local lmsMusic = workspace.LMS:FindFirstChild("LMSDoubleTrouble")
 		if lmsMusic then
@@ -276,6 +267,16 @@ function module.checkForLMS()
 
 		-- Set timer to 44 seconds
 		timerManager.setTime(44)
+
+		-- Remove terror sounds and map music
+		for i = 1, #numOfKillers do
+			if numOfKillers[i].Character then
+				local terrorSounds = numOfKillers[i].Character:FindFirstChild("TerrorSounds")
+				if terrorSounds then
+					terrorSounds:Destroy()
+				end
+			end
+		end
 
 		local currentMap = workspace.GameDebris:FindFirstChild("CurrentMap")
 		if currentMap then
